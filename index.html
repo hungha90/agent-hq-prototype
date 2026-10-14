@@ -1,0 +1,812 @@
+<title>Agent HQ Prototype</title>
+<style>
+:root { color-scheme: dark; }
+body { position:relative; }
+
+  :root {
+    --bg:#0c0f1b; color-scheme:dark; --glass:rgba(20,24,38,.82); --card:rgba(255,255,255,.04); --line:rgba(255,255,255,.09);
+    --text:#e8eaf2; --mute:#8b92a8; --ok:#19c37d; --warn:#E8B33A; --bad:#E8503A; --accent:#7C5CFF;
+    --mono:ui-monospace,SFMono-Regular,Consolas,monospace;
+  }
+  * { box-sizing:border-box; }
+  html, body { height:100%; margin:0; overflow:hidden; }
+  body { background:var(--bg); color:var(--text); font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  button { font:inherit; color:inherit; }
+  .mono { font-family:var(--mono); }
+  .mute { color:var(--mute); }
+
+  /* ---- thanh trên: kính nổi ---- */
+  #bar { position:absolute; z-index:30; top:10px; left:10px; right:10px; height:52px; display:flex; align-items:center; gap:12px;
+    padding:0 12px; background:var(--glass); backdrop-filter:blur(12px); border:1px solid var(--line); border-radius:14px; }
+  .brand { display:flex; align-items:center; gap:8px; min-width:0; flex:1 1 0; }
+  .logo { width:26px; height:26px; border-radius:8px; background:linear-gradient(135deg,#7C5CFF,#3AE8B0); flex:none; }
+  .brand b { font-size:15px; white-space:nowrap; }
+  .ws { display:flex; align-items:center; gap:6px; padding:3px 8px; border:1px solid var(--line); border-radius:99px; color:var(--mute); font-size:12px; white-space:nowrap; }
+  .av { width:20px; height:20px; border-radius:50%; display:grid; place-items:center; font:700 11px system-ui; color:#fff;
+    background:linear-gradient(135deg,#F2A65A,#E58FB0); flex:none; }
+  #tabs { flex:none; display:flex; gap:2px; padding:3px; background:rgba(255,255,255,.05); border-radius:99px; }
+  .tab { background:none; border:0; padding:6px 14px; border-radius:99px; color:var(--mute); cursor:pointer; display:flex; gap:6px; align-items:center; }
+  .tab.on { background:rgba(255,255,255,.1); color:var(--text); }
+  .tab .n { font:600 11px var(--mono); background:rgba(124,92,255,.35); color:#d9ceff; padding:0 6px; border-radius:99px; }
+  .right { flex:0 1 auto; min-width:0; justify-content:flex-end; display:flex; align-items:center; gap:10px; }
+  @media (min-width:1250px) { .right { flex:1 1 0; } }
+  .search { position:relative; display:flex; align-items:center; gap:6px; padding:0 8px; height:32px; width:210px; min-width:90px; flex:0 1 210px;
+    background:rgba(255,255,255,.05); border:1px solid var(--line); border-radius:10px; }
+  .search input { flex:1; min-width:0; background:none; border:0; outline:0; color:var(--text); font:inherit; font-size:13px; }
+  .search kbd { font:11px var(--mono); color:var(--mute); border:1px solid var(--line); border-radius:5px; padding:0 5px; }
+  #sres { position:absolute; top:38px; left:0; right:0; background:rgba(16,20,34,.97); border:1px solid var(--line); border-radius:10px; overflow:hidden; display:none; z-index:40; }
+  #sres.open { display:block; }
+  #sres button { display:flex; width:100%; gap:8px; align-items:center; text-align:left; background:none; border:0; padding:8px 10px; cursor:pointer; }
+  #sres button:hover, #sres button.hl { background:rgba(255,255,255,.07); }
+  .chip { display:flex; align-items:center; gap:6px; padding:5px 10px; border-radius:99px; font-size:12px; white-space:nowrap;
+    background:rgba(25,195,125,.12); border:1px solid rgba(25,195,125,.35); color:#bff3dc; }
+  .chip i { width:7px; height:7px; border-radius:50%; background:var(--ok); }
+  .bell { position:relative; background:none; border:0; cursor:pointer; padding:4px; color:var(--mute); }
+  .bell b { position:absolute; top:-2px; right:-2px; background:var(--bad); color:#fff; font:700 10px var(--mono); border-radius:99px; padding:0 4px; min-width:15px; text-align:center; }
+  .bell b[hidden] { display:none; }
+
+  /* ---- cảnh 3D + lớp phủ ---- */
+  #stage { position:absolute; inset:0; overflow:hidden; }
+  #stage[hidden], #view[hidden], #runs[hidden], #map[hidden] { display:none; }
+  #view { position:absolute; inset:0; overflow:auto; padding:84px 24px 24px; }
+  #view .wrap { max-width:860px; margin:0 auto; }
+  h2 { margin:0 0 14px; font-size:20px; }
+  h4 { margin:18px 0 8px; color:var(--mute); font:600 11px var(--mono); letter-spacing:.1em; text-transform:uppercase; display:flex; justify-content:space-between; }
+  h4 .pill { text-transform:none; letter-spacing:0; color:var(--ok); }
+
+  #runs { position:absolute; left:14px; bottom:12px; z-index:10; display:flex; gap:6px; align-items:center; font:10px var(--mono); color:var(--mute); }
+  #runs span { padding:3px 8px; border-radius:6px; background:rgba(255,255,255,.07); color:#cfd5e6; }
+  #runs span.on { outline:1px solid var(--ok); }
+  #map { position:absolute; right:14px; bottom:12px; z-index:10; width:150px; padding:8px; background:var(--glass); backdrop-filter:blur(10px); border:1px solid var(--line); border-radius:12px; }
+  #map .top { display:flex; justify-content:space-between; font:10px var(--mono); color:var(--mute); margin-bottom:4px; }
+  #map canvas { width:100%; height:80px; display:block; background:rgba(0,0,0,.25); border-radius:8px; }
+  #map .btns { display:flex; gap:6px; margin-top:6px; }
+  #map .btns button { flex:1; background:rgba(255,255,255,.07); border:0; border-radius:6px; padding:3px 0; cursor:pointer; }
+  #map .btns button:hover { background:rgba(255,255,255,.14); }
+  #toasts, #subs { position:absolute; right:14px; z-index:20; width:290px; display:flex; flex-direction:column; gap:8px; pointer-events:none; }
+  #toasts { top:74px; }
+  #subs { top:200px; }
+  .toast { display:flex; gap:10px; align-items:center; padding:8px 10px; background:var(--glass); backdrop-filter:blur(10px); border:1px solid var(--line); border-radius:12px; animation:in .25s ease; }
+  .toast .t { flex:1; min-width:0; } .toast b { display:block; font-size:12px; } .toast span { font-size:12px; color:var(--mute); }
+  .toast em { font:10px var(--mono); color:var(--mute); font-style:normal; }
+  @keyframes in { from { opacity:0; transform:translateY(-6px); } }
+  .tile { width:28px; height:28px; border-radius:8px; display:grid; place-items:center; font:700 13px system-ui; color:#fff; flex:none; }
+  .sub { padding:8px 12px; background:var(--glass); backdrop-filter:blur(10px); border:1px solid var(--line); border-radius:12px; }
+  .sub b { font-size:13px; }
+  .sub .st { display:flex; gap:6px; margin-top:6px; }
+  .sub .st span { position:relative; flex:1; text-align:center; font:600 10px var(--mono); letter-spacing:.06em; padding:3px 0; border-radius:99px; border:1px solid var(--line); color:var(--mute); overflow:hidden; }
+  .sub .st span.on { color:#e9e3ff; background:rgba(124,92,255,.3); border-color:rgba(124,92,255,.6); }
+  .sub .st span i { position:absolute; left:0; bottom:0; height:2px; background:var(--accent); }
+
+  /* ---- panel kính bên trái ---- */
+  #detail { position:absolute; z-index:25; left:12px; top:72px; bottom:12px; width:380px; overflow:auto; display:none;
+    background:var(--glass); backdrop-filter:blur(14px); border:1px solid var(--line); border-radius:16px; padding:16px; }
+  #detail.open { display:block; }
+  .ph { display:flex; gap:10px; align-items:center; }
+  .ph .tile { width:36px; height:36px; font-size:16px; }
+  .ph h3 { margin:0; font-size:17px; }
+  .x { margin-left:auto; background:none; border:0; color:var(--mute); cursor:pointer; font-size:20px; line-height:1; }
+  .rtabs { display:flex; gap:16px; margin:14px 0 4px; border-bottom:1px solid var(--line); }
+  .rtabs button { background:none; border:0; padding:6px 0; color:var(--mute); cursor:pointer; border-bottom:2px solid transparent; }
+  .rtabs button.on { color:var(--text); border-color:var(--accent); }
+  .cards { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px 10px; }
+  .card .l { font-size:11px; color:var(--mute); } .card .v { font-size:22px; font-weight:600; }
+  .card svg { width:100%; height:22px; display:block; }
+  .tools { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .tool { display:flex; gap:8px; align-items:center; padding:8px; background:var(--card); border:1px solid var(--line); border-radius:10px; min-width:0; }
+  .tool b { font-size:13px; display:block; } .tool span { font-size:11px; color:var(--mute); }
+  .tool span i { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--ok); margin-right:5px; }
+  .sk { display:grid; grid-template-columns:10px 1fr 90px 36px; gap:8px; align-items:center; padding:3px 0; font-family:var(--mono); font-size:12px; }
+  .sk .d { width:7px; height:7px; border-radius:50%; background:#4a5068; } .sk .d.on { background:var(--ok); }
+  .bar { height:5px; background:rgba(255,255,255,.08); border-radius:3px; overflow:hidden; } .bar i { display:block; height:100%; background:var(--ok); }
+  .sk .p { text-align:right; color:var(--mute); }
+  .ag { display:flex; gap:10px; align-items:center; width:100%; text-align:left; padding:8px; margin-bottom:6px; cursor:pointer;
+    background:var(--card); border:1px solid var(--line); border-radius:12px; }
+  .ag:hover { border-color:rgba(255,255,255,.25); }
+  .ag .av { width:32px; height:32px; font-size:13px; }
+  .ag .m { flex:1; min-width:0; } .ag .m b { font-size:13px; } .ag .m div { font-size:11px; color:var(--mute); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .lead { font:600 10px var(--mono); background:rgba(255,255,255,.1); padding:0 6px; border-radius:4px; margin-left:6px; }
+  .pillst { font:600 11px var(--mono); padding:2px 8px; border-radius:99px; background:rgba(255,255,255,.07); color:var(--mute); }
+  .pillst.working { background:rgba(25,195,125,.15); color:#7ee8b7; }
+  .pillst.stale { background:rgba(232,179,58,.15); color:#f0c869; }
+  .pillst.error { background:rgba(232,80,58,.15); color:#f08a7a; }
+
+  /* ---- chat ---- */
+  .back { background:none; border:0; color:var(--mute); cursor:pointer; padding:0; }
+  .msgs { display:flex; flex-direction:column; gap:10px; margin:14px 0; }
+  .msg { max-width:88%; padding:9px 12px; border-radius:12px; background:var(--card); border:1px solid var(--line); }
+  .msg .who { font:600 10px var(--mono); letter-spacing:.08em; color:var(--mute); margin-bottom:3px; text-transform:uppercase; }
+  .msg.user { align-self:flex-end; background:linear-gradient(135deg,#7C5CFF,#3A8DE8); border:0; }
+  .msg.user .who { color:rgba(255,255,255,.75); }
+  .file { display:flex; gap:10px; align-items:center; margin-top:8px; padding:8px; background:rgba(0,0,0,.25); border:1px solid var(--line); border-radius:10px; }
+  .file .pl { width:36px; height:26px; border-radius:6px; background:rgba(255,255,255,.1); display:grid; place-items:center; font-size:11px; }
+  .file b { font:12px var(--mono); display:block; } .file span { font:11px var(--mono); color:var(--mute); }
+  .note { margin-top:6px; font-size:11px; color:rgba(255,255,255,.75); }
+  form.send { display:flex; gap:6px; }
+  form.send input { flex:1; min-width:0; background:rgba(255,255,255,.05); border:1px solid var(--line); color:var(--text); border-radius:12px; padding:10px 12px; font:inherit; outline:0; }
+  form.send .mic, form.send .go { width:40px; border:0; border-radius:12px; cursor:pointer; }
+  form.send .mic { background:rgba(255,255,255,.07); color:var(--mute); }
+  form.send .go { background:linear-gradient(135deg,#7C5CFF,#3A8DE8); color:#fff; }
+
+  /* ---- Tasks / Calendar / Brain ---- */
+  .row { display:flex; gap:10px; align-items:center; padding:10px 12px; margin-bottom:8px; background:var(--card); border:1px solid var(--line); border-radius:12px; }
+  .row .m { flex:1; min-width:0; }
+  .act { background:var(--ok); border:0; color:#04140c; font-weight:600; border-radius:8px; padding:5px 12px; cursor:pointer; }
+  .act.no { background:rgba(255,255,255,.1); color:var(--text); font-weight:400; }
+  .time { font:600 13px var(--mono); width:52px; }
+  .fake { font:10px var(--mono); color:var(--mute); border:1px dashed var(--line); border-radius:4px; padding:0 5px; }
+  .big { font-size:42px; font-weight:700; }
+  .rooms { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; }
+  .room { text-align:left; background:var(--card); border:1px solid var(--line); border-top:4px solid var(--c); border-radius:10px; padding:12px; cursor:pointer; }
+
+  @media (max-width:1100px) { .ws, .search kbd { display:none; } }
+  @media (max-width:860px) { .chip { display:none; } }
+  @media (max-width:700px) {
+    #tabs { order:3; }
+    #bar { height:auto; flex-wrap:wrap; padding:8px 10px; row-gap:6px; }
+    .brand b, .ws, .search kbd, #runs, #toasts { display:none; }
+    .search { width:auto; flex:1; }
+    .right { margin-left:0; flex:1; }
+    #detail.open { left:0; top:0; right:0; bottom:0; width:auto; border-radius:0; z-index:50; background:#10142a; }
+    #subs { display:none; }
+    #view { padding-top:130px; }
+    #map { width:120px; }
+  }
+
+</style>
+
+<header id="bar">
+  <div class="brand"><span class="logo"></span><b>Agent HQ</b><span class="ws"><span class="av">H</span><span id="ws"></span> ▾</span></div>
+  <nav id="tabs"></nav>
+  <div class="right">
+    <div class="search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8b92a8" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input id="q" placeholder="Ask any agent…" autocomplete="off"><kbd>⌘K</kbd>
+      <div id="sres"></div>
+    </div>
+    <span class="chip"><i></i><span id="chip"></span></span>
+    <button class="bell" id="bell" title="Việc chờ duyệt">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>
+      <b id="bellN" hidden></b>
+    </button>
+    <span class="av" style="width:30px;height:30px;font-size:13px">H</span>
+  </div>
+</header>
+
+<div id="stage"></div>
+<div id="view" hidden></div>
+<div id="toasts"></div>
+<div id="subs"></div>
+<aside id="detail"></aside>
+<div id="runs"><span style="background:none;padding:0">RUNS ON</span><span data-m="opus">Opus</span><span data-m="sonnet">Sonnet</span><span data-m="haiku">Haiku</span><span>headless · cloud</span></div>
+<div id="map">
+  <div class="top"><span>MAP</span><span id="zoom">100%</span></div>
+  <canvas id="mapc" width="260" height="170"></canvas>
+  <div class="btns"><button data-zoom="out" title="Thu nhỏ">−</button><button data-zoom="in" title="Phóng to">+</button><button data-zoom="reset" title="Về toàn cảnh">⤢</button></div>
+</div>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
+<script>
+// Lớp 3: cảnh 3D "văn phòng" bằng Three.js (0.160, bản UMD). Chỉ vẽ, không giữ sự thật: đọc rooms/agents từ data đã phủ state (lớp 1+2).
+// Dựng bằng hình khối, camera isometric (orthographic). Kéo = pan, lăn chuột = zoom, bấm phòng = onPick(roomId).
+// API: mount(el, data, onPick, onTick) -> { draw, select, focusRoom, resetView, zoomBy, info, destroy }
+(function () {
+  const T = window.THREE;
+  const STATE_COLOR = { stale: 0xE8B33A, error: 0xE8503A };
+  const PALETTE = [0xf4f1ea, 0x6fd3c0, 0xf2a65a, 0x9aa7ff, 0xe58fb0];
+  const R = 8.5; // bán kính vòng phòng quanh brain
+  const H0 = 11; // nửa chiều cao khung nhìn mặc định (zoom 100%)
+
+  const css = document.createElement('style');
+  css.textContent = `
+    .lbl { position:absolute; transform:translate(-50%,-100%); pointer-events:none; white-space:nowrap;
+      background:rgba(18,22,36,.82); border:1px solid rgba(255,255,255,.12); border-radius:8px;
+      padding:3px 8px; font:12px/1.35 system-ui,sans-serif; color:#e6e8ef; }
+    .lbl.agent { font-size:11px; padding:1px 6px; border-radius:99px; }
+    .lbl.agent i { display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:4px; background:#8b90a3; }
+    .lbl.agent i.working { background:#00B38A; }
+    .lbl.agent i.stale { background:#E8B33A; }
+    .lbl.agent i.error { background:#E8503A; }
+    .lbl.brain { text-align:center; padding:6px 12px; }
+    .lbl.brain b { display:block; letter-spacing:.14em; font:600 11px ui-monospace,Consolas,monospace; }
+    .lbl.brain span { font:11px ui-monospace,Consolas,monospace; color:#9fb0c8; }
+    .lbl.bay { background:none; border:0; font:10px ui-monospace,Consolas,monospace; letter-spacing:.12em; color:#b9a8ff; }
+    .lbl.room { display:flex; gap:8px; align-items:center; padding:6px 10px 6px 6px; border-radius:10px; background:rgba(14,18,30,.88); }
+    .lbl.room.sel { border-color:var(--c); box-shadow:0 0 0 1px var(--c), 0 0 18px -2px var(--c); }
+    .lbl.room .ic { width:26px; height:26px; border-radius:7px; display:grid; place-items:center; font:700 13px system-ui; color:#fff; }
+    .lbl.room .tx { display:flex; flex-direction:column; text-align:left; }
+    .lbl.room b { font-size:13px; }
+    .lbl.room .sub { font-size:11px; color:#9aa3b8; }
+    .lbl.room .sub i { display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:5px; background:#00B38A; }
+    .lbl.room .act { display:none; font-size:11px; color:#cfd6ea; }
+    .lbl.room.sel .act { display:block; }
+    .lbl.room .faces { display:flex; margin-left:4px; }
+    .lbl.room .faces u { width:14px; height:14px; border-radius:50%; border:1.5px solid #12162a; margin-left:-4px; text-decoration:none; }
+  `;
+  document.head.appendChild(css);
+
+  const hex = c => '#' + new T.Color(c).getHexString();
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  function roomState(r) {
+    const a = r.agents.find(x => x.status === 'stale' || x.status === 'error');
+    return a ? a.status : null;
+  }
+
+  function mount(el, data, onPick, onTick) {
+    const scene = new T.Scene();
+    scene.background = new T.Color(0x0c0f1b);
+    scene.add(new T.HemisphereLight(0xaab8ff, 0x1a1c2c, 1.0));
+    const sun = new T.DirectionalLight(0xffffff, 0.9);
+    sun.position.set(10, 20, 6);
+    scene.add(sun);
+
+    const cam = new T.OrthographicCamera(-1, 1, 1, -1, -100, 100);
+    const focus = new T.Vector3(0, 0, 0);
+    let H = H0;
+    let tgt = null; // { fx, fz, H } đang bay camera tới
+    const renderer = new T.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    el.appendChild(renderer.domElement);
+    renderer.domElement.style.display = 'block';
+
+    const labels = [];
+    function addLabel(html, obj, cls) {
+      const div = document.createElement('div');
+      div.className = 'lbl ' + (cls || '');
+      div.innerHTML = html;
+      el.appendChild(div);
+      labels.push({ div, obj });
+      return div;
+    }
+    const mat = (c, o = {}) => new T.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.8, metalness: 0.05 }, o));
+    const box = (w, h, d, m) => new T.Mesh(new T.BoxGeometry(w, h, d), m);
+
+    const ground = new T.Mesh(new T.PlaneGeometry(90, 90), mat(0x121627));
+    ground.rotation.x = -Math.PI / 2; ground.position.y = -0.02;
+    scene.add(ground);
+
+    // brain ở giữa: bục tròn + vòng sáng + quả cầu lưới + tia
+    const brain = new T.Group();
+    const disc = new T.Mesh(new T.CylinderGeometry(2.4, 2.6, 0.35, 48), mat(0x1a2238));
+    disc.position.y = 0.17;
+    const ring = new T.Mesh(new T.TorusGeometry(2.0, 0.07, 12, 64), mat(0x66e0ff, { emissive: 0x66e0ff, emissiveIntensity: 1.2 }));
+    ring.rotation.x = Math.PI / 2; ring.position.y = 0.4;
+    const orb = new T.Mesh(new T.SphereGeometry(0.9, 32, 24), mat(0xbfefff, { emissive: 0x66e0ff, emissiveIntensity: 0.9 }));
+    orb.position.y = 1.7;
+    const mesh = new T.Mesh(new T.IcosahedronGeometry(1.5, 2),
+      new T.MeshBasicMaterial({ color: 0x9be8ff, wireframe: true, transparent: true, opacity: 0.35 }));
+    mesh.position.y = 1.7;
+    const beam = new T.Mesh(new T.CylinderGeometry(0.08, 0.08, 10, 12),
+      new T.MeshBasicMaterial({ color: 0xffe6a0, transparent: true, opacity: 0.35 }));
+    beam.position.y = 6;
+    brain.add(disc, ring, orb, mesh, beam);
+    scene.add(brain);
+    const brainTarget = new T.Object3D(); brainTarget.position.set(0, 3.4, 0); scene.add(brainTarget);
+    addLabel(`<b>THE BRAIN</b><span>${esc(data.brain.notes.toLocaleString('en-US'))} notes · shared memory</span>`, brainTarget, 'brain');
+
+    // phòng quanh brain
+    const rooms = [];
+    const pickables = [];
+    const n = data.rooms.length;
+    data.rooms.forEach((r, i) => {
+      const angle = (i / n) * Math.PI * 2 + Math.PI / 4;
+      const st = roomState(r);
+      const accent = new T.Color(st ? STATE_COLOR[st] : r.color);
+      const g = new T.Group();
+      g.position.set(Math.cos(angle) * R, 0, Math.sin(angle) * R);
+      g.userData.roomId = r.id;
+
+      const floorMat = mat(accent, { emissive: accent, emissiveIntensity: 0 });
+      const floor = box(5, 0.25, 5, floorMat); floor.position.y = 0.12;
+      const wallMat = mat(accent.clone().multiplyScalar(0.55));
+      const wallA = box(0.2, 2.4, 5, wallMat); wallA.position.set(-2.4, 1.3, 0);
+      const wallB = box(5, 2.4, 0.2, wallMat); wallB.position.set(0, 1.3, -2.4);
+      const rug = new T.Mesh(new T.PlaneGeometry(3.2, 2.6), mat(accent.clone().lerp(new T.Color(0xffffff), 0.55)));
+      rug.rotation.x = -Math.PI / 2; rug.position.set(0.3, 0.26, 0.4);
+      const plant = new T.Mesh(new T.SphereGeometry(0.35, 12, 10), mat(0x3fa86a));
+      plant.position.set(2.0, 0.7, -1.9);
+      // màn hình dashboard trên tường sau
+      const wall = box(1.5, 0.9, 0.06, mat(0x0d1220, { emissive: 0x16305a, emissiveIntensity: 0.6 }));
+      wall.position.set(1.0, 1.7, -2.27);
+      const chart = new T.Line(new T.BufferGeometry().setFromPoints(
+        [-0.6, -0.2, 0, 0.25, 0.5].map((v, k) => new T.Vector3(0.4 + k * 0.3, 1.45 + v * 0.6 + (k % 2) * 0.1, -2.23))),
+        new T.LineBasicMaterial({ color: 0x66e0ff }));
+      g.add(floor, wallA, wallB, rug, plant, wall, chart);
+      // nội thất: đèn cây, kệ sách
+      const pole = new T.Mesh(new T.CylinderGeometry(0.04, 0.04, 1.8, 8), mat(0x333a52)); pole.position.set(2.0, 1.1, 1.9);
+      const shade = new T.Mesh(new T.SphereGeometry(0.28, 14, 10), mat(0xfff2c4, { emissive: 0xffe6a0, emissiveIntensity: 0.9 }));
+      shade.position.set(2.0, 2.1, 1.9);
+      const shelf = box(1.8, 0.9, 0.25, mat(0x7a5a3a)); shelf.position.set(-0.8, 1.4, -2.2);
+      g.add(pole, shade, shelf);
+      [0xE8503A, 0x3A8DE8, 0xE8B33A, 0x00B38A, 0x7C5CFF].forEach((c, k) => {
+        const bk = box(0.2, 0.55, 0.18, mat(c)); bk.position.set(-1.45 + k * 0.3, 1.4, -2.05); g.add(bk);
+      });
+
+      const glows = [];
+      const slots = [[-0.6, -0.2], [1.1, -0.2], [0.3, 1.3], [-1.2, 1.2]];
+      r.agents.forEach((a, k) => {
+        const [sx, sz] = slots[k % slots.length];
+        const desk = box(1.3, 0.1, 0.7, mat(0xe8dcc4)); desk.position.set(sx, 0.85, sz - 0.5);
+        const screen = box(0.6, 0.4, 0.05, mat(0x1b2236, { emissive: a.status === 'working' ? 0x3a6cff : 0x000000, emissiveIntensity: 0.8 }));
+        screen.position.set(sx, 1.2, sz - 0.75);
+        const body = new T.Mesh(new T.CylinderGeometry(0.2, 0.25, 0.65, 14), mat(PALETTE[k % PALETTE.length]));
+        body.position.set(sx, 0.62, sz + 0.2);
+        const head = new T.Mesh(new T.SphereGeometry(0.19, 16, 12), mat(0xf1c9a5));
+        head.position.set(sx, 1.15, sz + 0.2);
+        const seat = box(0.5, 0.08, 0.5, mat(0x2a3048)); seat.position.set(sx, 0.36, sz + 0.28);
+        const back = box(0.5, 0.55, 0.08, mat(0x2a3048)); back.position.set(sx, 0.68, sz + 0.55);
+        g.add(desk, screen, seat, back, body, head);
+        if (a.status === 'working') {
+          const glow = new T.Mesh(new T.TorusGeometry(0.4, 0.04, 8, 28), mat(0x00ffb3, { emissive: 0x00ffb3, emissiveIntensity: 1.5 }));
+          glow.rotation.x = Math.PI / 2; glow.position.set(sx, 0.3, sz + 0.2);
+          g.add(glow); glows.push({ glow, head });
+        }
+        const anchor = new T.Object3D(); anchor.position.set(sx, 1.6, sz + 0.2); g.add(anchor);
+        const dotCls = ['working', 'stale', 'error'].includes(a.status) ? a.status : '';
+        addLabel(`<i class="${dotCls}"></i>${esc(a.id)}`, anchor, 'agent');
+      });
+
+      // SUB-AGENT BAY: viền nét đứt trên sàn nếu phòng có sub-agent
+      if (r.subagents && r.subagents.length) {
+        const pts = [[-2.1, 2.0], [1.4, 2.0], [1.4, 2.4], [-2.1, 2.4], [-2.1, 2.0]].map(([x, z]) => new T.Vector3(x, 0.28, z));
+        const bay = new T.Line(new T.BufferGeometry().setFromPoints(pts),
+          new T.LineDashedMaterial({ color: 0xd9ceff, dashSize: 0.18, gapSize: 0.12 }));
+        bay.computeLineDistances();
+        g.add(bay);
+        const ba = new T.Object3D(); ba.position.set(-0.4, 0.3, 2.2); g.add(ba);
+        addLabel('SUB-AGENT BAY · ready', ba, 'bay');
+      }
+      g.traverse(o => { if (o.isMesh) pickables.push(o); });
+      scene.add(g);
+
+      // nhãn phòng dạng thẻ: icon + tên + đếm + dòng hoạt động (hiện khi chọn)
+      const top = new T.Object3D(); top.position.set(0, 3.1, 0); g.add(top);
+      const run = r.agents.filter(a => a.status === 'working').length;
+      const lead = r.agents.find(a => a.role === 'LEAD') || r.agents[0];
+      const stTxt = st ? ` · <span style="color:${hex(STATE_COLOR[st])}">${st === 'stale' ? 'quá hạn' : 'lỗi'}</span>` : '';
+      const subTxt = r.subagents && r.subagents.length ? ` · ${r.subagents.length} sub-agents` : '';
+      const faces = r.agents.slice(0, 3).map((a, k) => `<u style="background:${hex(PALETTE[k % PALETTE.length])}"></u>`).join('');
+      const lab = addLabel(
+        `<span class="ic" style="background:${hex(accent)}">${esc(r.name[0])}</span>
+         <span class="tx"><b>${esc(r.name)}</b>
+         <span class="sub"><i style="background:${st ? hex(STATE_COLOR[st]) : '#00B38A'}"></i>${r.agents.length} agents · ${run} running${subTxt}${stTxt}</span>
+         <span class="act">${esc(lead.task || r.name)}</span></span><span class="faces">${faces}</span>`, top, 'room');
+      lab.style.setProperty('--c', hex(accent));
+
+      // đường nối phòng - brain
+      const mid = (2.7 + (R - 2.5)) / 2;
+      const road = box(R - 2.7 - 2.5, 0.05, 0.9, mat(0x232842));
+      road.position.set(Math.cos(angle) * mid, 0.02, Math.sin(angle) * mid);
+      road.rotation.y = -angle;
+      scene.add(road);
+      const dash = box(R - 2.7 - 2.5 - 0.4, 0.06, 0.05, mat(0xE8B33A, { emissive: 0xE8B33A, emissiveIntensity: 0.5 }));
+      dash.position.copy(road.position); dash.position.y = 0.05; dash.rotation.y = -angle;
+      scene.add(dash);
+
+      // tia sáng cong phòng -> brain; hạt chạy khi phòng có agent working
+      const p0 = new T.Vector3(g.position.x, 2.4, g.position.z), p2 = new T.Vector3(0, 1.7, 0);
+      const p1 = p0.clone().add(p2).multiplyScalar(0.5).setY(7);
+      const curve = new T.QuadraticBezierCurve3(p0, p1, p2);
+      const line = new T.Line(new T.BufferGeometry().setFromPoints(curve.getPoints(40)),
+        new T.LineBasicMaterial({ color: accent, transparent: true, opacity: st ? 0.25 : 0.6 }));
+      scene.add(line);
+      const dot = new T.Mesh(new T.SphereGeometry(0.14, 10, 8), new T.MeshBasicMaterial({ color: accent }));
+      scene.add(dot);
+
+      // nhân vật đi bộ trên đường; chỉ đi khi phòng có agent working
+      const walker = new T.Group();
+      const wb = new T.Mesh(new T.CylinderGeometry(0.17, 0.2, 0.55, 12), mat(accent.clone().lerp(new T.Color(0xffffff), 0.3)));
+      wb.position.y = 0.55;
+      const wh = new T.Mesh(new T.SphereGeometry(0.16, 14, 10), mat(0xf1c9a5)); wh.position.y = 1.0;
+      walker.add(wb, wh);
+      scene.add(walker);
+      rooms.push({ id: r.id, color: hex(accent), x: g.position.x, z: g.position.z, floorMat, curve, dot, lab,
+        working: run > 0 && !st, p: i / n, glows, walker, angle, wp: i * 0.5 });
+    });
+
+    // kích thước + camera isometric
+    function fit() {
+      const w = el.clientWidth || 1, h = el.clientHeight || 1;
+      renderer.setSize(w, h);
+      const aspect = w / h;
+      const half = Math.max(H, 15 / aspect * (H / H0)); // luôn thấy đủ chiều ngang
+      cam.left = -half * aspect; cam.right = half * aspect; cam.top = half; cam.bottom = -half;
+      cam.position.copy(focus).add(new T.Vector3(20, 20, 20));
+      cam.lookAt(focus);
+      cam.updateProjectionMatrix();
+      cam.updateMatrixWorld(); // cần trước khi chiếu nhãn/raycast, kể cả khi chưa render
+    }
+    const ro = new ResizeObserver(fit); ro.observe(el);
+    fit();
+
+    // điều khiển: kéo pan, lăn zoom, bấm chọn phòng
+    const ray = new T.Raycaster(), mouse = new T.Vector2();
+    function pick(ev) {
+      const b = renderer.domElement.getBoundingClientRect();
+      mouse.set(((ev.clientX - b.left) / b.width) * 2 - 1, -((ev.clientY - b.top) / b.height) * 2 + 1);
+      ray.setFromCamera(mouse, cam);
+      const hit = ray.intersectObjects(pickables, false)[0];
+      let o = hit && hit.object;
+      while (o && !o.userData.roomId) o = o.parent;
+      return o ? o.userData.roomId : null;
+    }
+    let down = null;
+    const cv = renderer.domElement;
+    cv.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY, moved: false }; cv.setPointerCapture(e.pointerId); });
+    cv.addEventListener('pointermove', e => {
+      if (!down) { cv.style.cursor = pick(e) ? 'pointer' : 'grab'; return; }
+      const dx = e.clientX - down.x, dy = e.clientY - down.y;
+      if (Math.abs(dx) + Math.abs(dy) > 4) down.moved = true;
+      if (!down.moved) return;
+      tgt = null;
+      const u = (cam.top - cam.bottom) / cv.clientHeight; // đơn vị thế giới / pixel
+      focus.add(new T.Vector3(-1, 0, 1).multiplyScalar(dx * u * 0.707))
+           .add(new T.Vector3(-1, 0, -1).multiplyScalar(-dy * u * 1.2 * 0.707));
+      down.x = e.clientX; down.y = e.clientY; fit();
+    });
+    cv.addEventListener('pointerup', e => {
+      if (down && !down.moved) { const id = pick(e); if (id) onPick(id); }
+      down = null;
+    });
+    cv.addEventListener('wheel', e => { e.preventDefault(); tgt = null; H = Math.min(22, Math.max(4, H * (e.deltaY > 0 ? 1.1 : 0.9))); fit(); }, { passive: false });
+
+    // vòng lặp: brain xoay, agent working sáng nhịp, hạt chạy, nhân vật đi bộ, camera bay
+    const v = new T.Vector3();
+    let last = performance.now(), alive = true;
+    function draw(now) {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      const t = now / 1000;
+      if (tgt) {
+        const k = 1 - Math.pow(0.0005, dt);
+        focus.x += (tgt.fx - focus.x) * k; focus.z += (tgt.fz - focus.z) * k; H += (tgt.H - H) * k;
+        if (Math.abs(tgt.H - H) < 0.02 && Math.abs(tgt.fx - focus.x) < 0.02 && Math.abs(tgt.fz - focus.z) < 0.02) tgt = null;
+        fit();
+      }
+      orb.rotation.y += dt * 0.6; mesh.rotation.y -= dt * 0.25; ring.scale.setScalar(1 + Math.sin(t * 2) * 0.02);
+      rooms.forEach(r => {
+        if (r.working) r.p = (r.p + dt * 0.22) % 1;
+        r.dot.position.copy(r.curve.getPoint(r.p));
+        r.dot.visible = r.working;
+        if (r.working) r.wp += dt * 0.1;
+        const k = r.working ? Math.abs(((r.wp % 2) + 2) % 2 - 1) : 1;
+        const rad = 2.7 + (R - 2.5 - 2.7) * k;
+        const bob = r.working ? Math.abs(Math.sin(t * 8 + r.wp * 10)) * 0.06 : 0;
+        r.walker.position.set(Math.cos(r.angle) * rad - Math.sin(r.angle) * 0.2, bob, Math.sin(r.angle) * rad + Math.cos(r.angle) * 0.2);
+        r.glows.forEach(({ glow, head }, k2) => { glow.scale.setScalar(1 + Math.sin(t * 3 + k2) * 0.12); head.position.y = 1.15 + Math.sin(t * 3 + k2) * 0.02; });
+      });
+      const w = el.clientWidth, h = el.clientHeight;
+      labels.forEach(({ div, obj }) => {
+        obj.getWorldPosition(v).project(cam);
+        div.style.left = ((v.x * 0.5 + 0.5) * w) + 'px';
+        div.style.top = ((-v.y * 0.5 + 0.5) * h) + 'px';
+      });
+      renderer.render(scene, cam);
+      if (onTick) onTick();
+    }
+    function frame(now) {
+      if (!alive) return;
+      draw(now);
+      requestAnimationFrame(frame);
+    }
+    draw(performance.now()); // vẽ ngay khung đầu, không chờ rAF
+    requestAnimationFrame(frame);
+
+    return {
+      draw,
+      select(id) {
+        rooms.forEach(r => { r.floorMat.emissiveIntensity = r.id === id ? 0.45 : 0; r.lab.classList.toggle('sel', r.id === id); });
+      },
+      // bay camera vào phòng; shiftPx > 0 dời phòng sang phải để chừa chỗ cho panel bên trái
+      focusRoom(id, shiftPx = 0) {
+        const r = rooms.find(x => x.id === id);
+        if (!r) return;
+        const Ht = 4.6, u = (2 * Ht) / (el.clientHeight || 1);
+        tgt = { fx: r.x - 0.707 * shiftPx * u, fz: r.z + 0.707 * shiftPx * u, H: Ht };
+      },
+      resetView() { tgt = { fx: 0, fz: 0, H: H0 }; },
+      zoomBy(f) { tgt = { fx: focus.x, fz: focus.z, H: Math.min(22, Math.max(4, H * f)) }; },
+      // cho minimap: toạ độ màn hình "iso" của phòng + khung nhìn hiện tại
+      info() {
+        const sx = (x, z) => (x - z) / Math.SQRT2, sy = (x, z) => ((x + z) / Math.SQRT2) * 0.58;
+        return {
+          zoom: Math.round((H0 / H) * 100),
+          rooms: rooms.map(r => ({ id: r.id, color: r.color, x: sx(r.x, r.z), y: sy(r.x, r.z) })),
+          view: { x: sx(focus.x, focus.z), y: sy(focus.x, focus.z), hw: cam.right, hh: cam.top },
+        };
+      },
+      destroy() { alive = false; ro.disconnect(); renderer.dispose(); el.innerHTML = ''; },
+    };
+  }
+
+  window.OfficeScene = { mount };
+})();
+
+</script>
+<script>
+// UI chỉ là lớp xem: đọc data.json (lớp 1) + state.json (lớp 2) + queue (lớp 6). Không giữ sự thật.
+let D, JOBS = {}, tab = 'Office', roomId = null, roomTab = 'Overview', agentId = null, scene = null;
+let Q = { entries: [], online: true };
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const running = r => r.agents.filter(a => a.status === 'working').length;
+const roomOf = id => D.rooms.find(r => r.id === id);
+const COLORS = ['#7C5CFF', '#3A6FE8', '#1FA35A', '#E8833A', '#E58FB0', '#3AB8E8'];
+const tint = s => COLORS[[...String(s)].reduce((a, c) => a + c.charCodeAt(0), 0) % COLORS.length];
+const JOB_LABEL = { ok: 'chạy OK', stale: 'quá hạn', error: 'lỗi', unknown: 'không rõ' };
+const MOBILE = () => innerWidth <= 700;
+
+// ---- dữ liệu ----
+function overlay(state) {
+  JOBS = state.jobs || {};
+  for (const r of D.rooms) {
+    for (const a of r.agents) {
+      const j = a.job && JOBS[a.job];
+      if (!j) continue;
+      a.status = j.status; a.jobInfo = j;
+      a.task = j.last_run ? `Lần cuối ${j.last_run} · ${j.rows} hàng · ${j.zero_vph} zero_vph` : (j.note || '');
+    }
+    for (const s of r.skills) {
+      const j = s.job && JOBS[s.job];
+      if (j) { s.progress = null; s.label = JOB_LABEL[j.status] || j.status; }
+    }
+  }
+}
+async function loadQueue() { /* bản chia sẻ: hàng đợi chỉ nằm trong trang */ }
+async function post(path, body) {
+  const ts = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  const id = Math.random().toString(16).slice(2, 10);
+  if (path === '/api/requests') Q.entries.push({ id, ts, type: 'request', room: body.room, agent: body.agent, text: body.text, status: 'queued' });
+  else Q.entries.push({ id, ts, type: 'decision', task_id: body.task_id, decision: body.decision });
+}
+const decided = () => { const m = {}; Q.entries.filter(e => e.type === 'decision').forEach(e => { m[e.task_id] = e.decision; }); return m; };
+async function decide(taskId, decision) {
+  try {
+    await post('/api/decisions', { task_id: Number(taskId), decision });
+    toast(null, 'Tasks', decision === 'approve' ? 'Đã duyệt, ghi vào hàng đợi' : 'Đã từ chối, ghi vào hàng đợi');
+  } catch (e) { toast(null, 'Lỗi', 'Chưa ghi được'); }
+  render();
+}
+
+// ---- toast ----
+function toast(room, title, text) {
+  const r = room && roomOf(room);
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = `<span class="tile" style="background:${r ? r.color : '#3A8DE8'}">${esc(title[0])}</span>
+    <span class="t"><b>${esc(title)}</b><span>${esc(text)}</span></span><em>now</em>`;
+  const box = $('#toasts');
+  box.prepend(el);
+  while (box.children.length > 3) box.lastChild.remove();
+  setTimeout(() => el.remove(), 7000);
+}
+
+// ---- điều hướng ----
+function openRoom(id) {
+  roomId = id; roomTab = 'Overview'; agentId = null; render();
+  if (scene) scene.focusRoom(id, MOBILE() ? 0 : 190);
+}
+function closeRoom() { roomId = null; agentId = null; render(); if (scene) scene.resetView(); }
+
+// ---- vẽ ----
+function sparkline(vals, color) {
+  const max = Math.max(...vals, 1), min = Math.min(...vals, 0);
+  const pts = vals.map((v, i) => `${(i / (vals.length - 1)) * 100},${22 - ((v - min) / (max - min || 1)) * 20}`).join(' ');
+  return `<svg viewBox="0 0 100 24" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.6"/></svg>`;
+}
+
+function render() {
+  const decs = decided();
+  const waiting = D.tasks.filter(t => t.status === 'waiting_approval' && !decs[t.id]).length;
+  const openTasks = D.tasks.filter(t => !decs[t.id]).length;
+  $('#ws').textContent = D.workspace;
+  const agents = D.rooms.flatMap(r => r.agents);
+  $('#chip').textContent = `${agents.length} agents · ${agents.filter(a => a.status === 'working').length} running`;
+  $('#bellN').textContent = waiting; $('#bellN').hidden = !waiting;
+  $('#tabs').innerHTML = ['Office', 'Tasks', 'Calendar', 'Brain'].map(t =>
+    `<button class="tab ${t === tab ? 'on' : ''}" data-tab="${t}">${t}${t === 'Tasks' ? `<span class="n">${openTasks}</span>` : ''}</button>`).join('');
+  const active = new Set(agents.filter(a => a.status === 'working').map(a => a.model));
+  document.querySelectorAll('#runs [data-m]').forEach(s => s.classList.toggle('on', active.has(s.dataset.m)));
+
+  const has3d = !!(window.THREE && window.OfficeScene);
+  if (has3d && !scene) {
+    scene = OfficeScene.mount($('#stage'), D, openRoom, drawMap);
+  }
+  const showStage = tab === 'Office' && has3d;
+  $('#stage').hidden = !showStage;
+  $('#map').hidden = !showStage; $('#runs').hidden = !showStage;
+  $('#view').hidden = showStage;
+  if (scene) scene.select(roomId);
+  if (!showStage) $('#view').innerHTML = { Office: officeFallback, Tasks: tasksView, Calendar: calendarView, Brain: brainView }[tab]();
+  renderDetail();
+  renderSubs();
+}
+
+function officeFallback() {
+  return `<div class="wrap"><h2>Office</h2><div class="rooms">${D.rooms.map(r => `
+    <button class="room" style="--c:${r.color}" data-room="${r.id}"><b>${esc(r.name)}</b>
+    <div class="mute">${r.agents.length} agents · ${running(r)} running</div></button>`).join('')}</div></div>`;
+}
+
+function tasksView() {
+  const decs = decided();
+  const right = t => {
+    if (t.status !== 'waiting_approval') return `<span class="pillst working">đang chạy</span>`;
+    if (decs[t.id]) return `<span class="pillst">${decs[t.id] === 'approve' ? 'đã duyệt' : 'đã từ chối'}</span>`;
+    return `<span><button class="act" data-t="${t.id}" data-d="approve">Duyệt</button> <button class="act no" data-t="${t.id}" data-d="reject">Từ chối</button></span>`;
+  };
+  const reqs = Q.entries.filter(e => e.type === 'request');
+  return `<div class="wrap"><h2>Tasks</h2>
+    ${D.tasks.map(t => { const r = roomOf(t.room); return `<div class="row"><span class="tile" style="background:${r.color}">${esc(r.name[0])}</span>
+      <span class="m"><b>${esc(t.title)}</b><div class="mute">${esc(r.name)}</div></span>${right(t)}</div>`; }).join('')}
+    <h4>Hàng đợi (${reqs.length})<span class="pill">${Q.online ? '' : 'chưa kết nối server.py'}</span></h4>
+    ${reqs.length ? reqs.map(e => `<div class="row"><span class="m">${esc(e.text)}<div class="mute mono">${esc(e.agent || e.room)} · ${esc(e.ts)}</div></span><span class="pillst">${esc(e.status)}</span></div>`).join('')
+      : '<div class="mute">Chưa có yêu cầu nào. Gửi tin cho agent để thả vào đây.</div>'}</div>`;
+}
+
+function calendarView() {
+  const rows = [...D.calendar].sort((a, b) => a.time.localeCompare(b.time));
+  return `<div class="wrap"><h2>Calendar</h2><div class="mute" style="margin:-8px 0 14px">Lịch lặp hằng ngày. Dòng có nhãn "mẫu" là dữ liệu giả; chỉ vph_tracker_daily là task thật.</div>
+    ${rows.map(c => {
+      const r = roomOf(c.room), j = c.job && JOBS[c.job];
+      const st = j ? `<span class="pillst ${j.status}">${JOB_LABEL[j.status] || j.status}${j.last_run ? ' · lần cuối ' + esc(j.last_run.slice(0, 10)) : ''}</span>` : '';
+      return `<div class="row"><span class="time">${esc(c.time)}</span><span class="tile" style="background:${r.color}">${esc(r.name[0])}</span>
+        <span class="m"><b>${esc(c.title)}</b><div class="mute">${esc(r.name)} · ${esc(c.repeat)}</div></span>
+        ${c.fake ? '<span class="fake">mẫu</span>' : st}</div>`; }).join('')}</div>`;
+}
+
+function brainView() {
+  return `<div class="wrap"><h2>Brain</h2><div class="row" style="flex-direction:column;align-items:flex-start">
+    <span class="big">${D.brain.notes.toLocaleString('en-US')}</span><span class="mute">notes · shared memory · nguồn ${esc(D.brain.source)} (số giả)</span></div></div>`;
+}
+
+function renderSubs() {
+  const r = roomId && roomOf(roomId);
+  const subs = (r && r.subagents) || [];
+  $('#subs').innerHTML = subs.map((s, i) => `<div class="sub"><b>Sub-agent ${i + 1} · ${esc(s.id)}</b>
+    <div class="st">${['CUT', 'CAPTIONS', 'THUMBNAIL'].map(p => `<span class="${p === s.stage ? 'on' : ''}">${p}${p === s.stage ? `<i style="width:${s.progress}%"></i>` : ''}</span>`).join('')}</div></div>`).join('');
+}
+
+function renderDetail() {
+  const el = $('#detail'), r = roomId && roomOf(roomId);
+  el.classList.toggle('open', !!r);
+  if (!r) return;
+  if (agentId) return renderChat(el, r);
+  const lead = r.agents.find(a => a.role === 'LEAD') || r.agents[0];
+  const live = r.tools.filter(t => t.status === 'connected').length;
+  const par = r.skills.filter(s => s.progress != null && s.progress < 100).length;
+  const sp = r.stats.spark;
+  const stat = (l, v, arr, c) => `<div class="card"><div class="l">${l}</div><div class="v">${v}</div>${sparkline(arr, c)}</div>`;
+  let body;
+  if (roomTab === 'Overview') {
+    body = `<div class="cards">${stat('Tasks today', r.stats.tasksToday, sp.tasks, '#7C5CFF')}${stat('Running', running(r), sp.running, '#19c37d')}${stat('Avg turnaround', r.stats.turnaroundMin + 'm', sp.turn, '#3A8DE8')}</div>
+      <h4>Connected tools<span class="pill">${live} live</span></h4>
+      <div class="tools">${r.tools.map(t => `<div class="tool"><span class="tile" style="background:${tint(t.name)}">${esc(t.name[0])}</span>
+        <span><b>${esc(t.name)}</b><span><i></i>Connected · ${esc(t.via)}</span></span></div>`).join('')}</div>
+      <h4>Skills<span class="pill">${par ? par + ' running in parallel' : ''}</span></h4>
+      ${r.skills.map(s => { const on = s.progress != null && s.progress < 100; return `<div class="sk"><span class="d ${on ? 'on' : ''}"></span><span>${esc(s.name)}</span>
+        <span class="bar"><i style="width:${s.progress ?? 0}%"></i></span><span class="p">${s.progress == null ? esc(s.label || 'idle') : s.progress + '%'}</span></div>`; }).join('')}
+      <h4>Agents</h4>
+      ${r.agents.map(a => `<button class="ag" data-agent="${esc(a.id)}"><span class="av" style="background:${tint(a.id)}">${esc(a.id[0].toUpperCase())}</span>
+        <span class="m"><b>${esc(a.id)}</b>${a.role ? `<span class="lead">${esc(a.role)}</span>` : ''}<div>${esc(a.task || 'idle')}</div>
+        ${a.jobInfo ? `<div>7 lần gần nhất: ${esc(a.jobInfo.history.map(d => d.slice(5)).join(', '))}</div>` : ''}</span>
+        <span class="pillst ${a.status}">${a.status === 'stale' ? 'quá hạn' : a.status === 'error' ? 'lỗi' : esc(a.status)}</span></button>`).join('')}`;
+  } else if (roomTab === 'Tasks') {
+    const ts = D.tasks.filter(t => t.room === r.id);
+    body = ts.length ? ts.map(t => `<div class="row"><span class="m">${esc(t.title)}</span><span class="pillst">${esc(t.status)}</span></div>`).join('') : '<div class="mute">Không có task.</div>';
+  } else {
+    body = `<div class="mute" style="margin-top:14px">Chưa biết nội dung tab ${roomTab} (spec lớp 5 ghi "chưa biết").</div>`;
+  }
+  el.innerHTML = `<div class="ph"><span class="tile" style="background:${r.color}">${esc(r.name[0])}</span>
+    <div><h3>${esc(r.name)}</h3><div class="mute" style="font-size:12px">${r.agents.length} agents · lead: ${esc(lead.id)}</div></div>
+    <button class="x" data-close>×</button></div>
+    <div class="rtabs">${['Overview', 'Tasks', 'Calendar', 'Settings'].map(t => `<button class="${t === roomTab ? 'on' : ''}" data-rt="${t}">${t}</button>`).join('')}</div>${body}`;
+}
+
+// Khung chat agent: tin giả từ data.json; gửi tin = thả yêu cầu vào hàng đợi (lớp 6), chưa có worker chạy.
+function renderChat(el, r) {
+  const a = r.agents.find(x => x.id === agentId);
+  const msgs = (D.chats[agentId] ??= []);
+  el.innerHTML = `<div class="ph"><button class="back" data-back>← ${esc(r.name)}</button><button class="x" data-close>×</button></div>
+    <div class="ph" style="margin-top:8px"><span class="av" style="width:36px;height:36px;background:${tint(agentId)}">${esc(agentId[0].toUpperCase())}</span>
+    <div><h3>${esc(agentId)}${a.role ? `<span class="lead">${esc(a.role)}</span>` : ''}</h3>
+    <div class="mute" style="font-size:12px">${esc(a.model)} · ${esc(a.task || 'idle')}</div></div></div>
+    <div class="msgs">${msgs.length ? msgs.map(m => `<div class="msg ${m.from}"><div class="who">${m.from === 'user' ? 'YOU' : esc(agentId)} · ${esc(m.time)}</div><div>${esc(m.text)}</div>
+      ${m.attachment ? `<div class="file"><span class="pl">▶</span><span><b>${esc(m.attachment.split(' · ')[0])}</b><span>${esc(m.attachment.split(' · ').slice(1).join(' · '))}</span></span></div>` : ''}
+      ${m.note ? `<div class="note">${esc(m.note)}</div>` : ''}</div>`).join('') : '<div class="mute">Chưa có tin nhắn.</div>'}</div>
+    <form class="send" id="f"><input id="in" placeholder="Message the agent…" autocomplete="off">
+    <button type="button" class="mic" title="Giọng nói (chưa làm)">●</button><button class="go" title="Gửi">➤</button></form>`;
+  const m = el.querySelector('.msgs'); m.scrollTop = m.scrollHeight;
+}
+
+// ---- minimap ----
+function drawMap() {
+  if (!scene || $('#map').hidden) return;
+  const c = $('#mapc'), g = c.getContext('2d'), W = c.width, Hh = c.height, S = 8;
+  const info = scene.info();
+  $('#zoom').textContent = info.zoom + '%';
+  g.clearRect(0, 0, W, Hh);
+  const X = x => W / 2 + x * S, Y = y => Hh / 2 + y * S;
+  g.fillStyle = '#66e0ff'; g.beginPath(); g.arc(X(0), Y(0), 5, 0, 7); g.fill();
+  info.rooms.forEach(r => { g.fillStyle = r.color; g.fillRect(X(r.x) - 12, Y(r.y) - 7, 24, 14); });
+  const v = info.view;
+  g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 2;
+  g.strokeRect(X(v.x - v.hw), Y(v.y - v.hh), v.hw * 2 * S, v.hh * 2 * S);
+}
+
+// ---- sự kiện ----
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-tab],[data-room],[data-agent],[data-back],[data-close],[data-rt],[data-d],[data-zoom],#bell,#sres button');
+  if (!t) { if (!e.target.closest('.search')) $('#sres').classList.remove('open'); return; }
+  if (t.dataset.tab) { tab = t.dataset.tab; if (roomId) closeRoom(); else render(); }
+  else if (t.dataset.room) openRoom(t.dataset.room);
+  else if (t.dataset.agent) { agentId = t.dataset.agent; render(); }
+  else if (t.hasAttribute('data-back')) { agentId = null; render(); }
+  else if (t.hasAttribute('data-close')) closeRoom();
+  else if (t.dataset.rt) { roomTab = t.dataset.rt; render(); }
+  else if (t.dataset.d) decide(t.dataset.t, t.dataset.d);
+  else if (t.dataset.zoom && scene) { t.dataset.zoom === 'in' ? scene.zoomBy(0.75) : t.dataset.zoom === 'out' ? scene.zoomBy(1.33) : scene.resetView(); }
+  else if (t.id === 'bell') { tab = 'Tasks'; if (roomId) closeRoom(); else render(); }
+  else if (t.dataset.go) { /* xử lý ở search */ }
+});
+
+document.addEventListener('submit', async e => {
+  if (e.target.id !== 'f') return;
+  e.preventDefault();
+  const r = roomOf(roomId), text = $('#in').value.trim();
+  if (!r || !text) return;
+  const msg = { from: 'user', time: new Date().toTimeString().slice(0, 5), text };
+  try {
+    await post('/api/requests', { room: r.id, agent: agentId, text });
+    msg.note = 'Bản xem thử: yêu cầu chỉ nằm trong trang này, chưa có agent nào nhận';
+    toast(r.id, r.name, `Yêu cầu cho ${agentId} đã vào hàng đợi`);
+  } catch (err) { msg.note = 'Chưa ghi được vào hàng đợi (chạy server.py chưa?)'; }
+  (D.chats[agentId] ??= []).push(msg);
+  render();
+});
+
+// ô tìm ⌘K: gõ để lọc phòng/agent, Enter chọn kết quả đầu
+const qEl = $('#q');
+function results(q) {
+  q = q.trim().toLowerCase();
+  const out = [];
+  for (const r of D.rooms) {
+    if (!q || r.name.toLowerCase().includes(q)) out.push({ label: r.name, sub: `phòng · ${r.agents.length} agents`, color: r.color, room: r.id });
+    for (const a of r.agents)
+      if (!q || a.id.toLowerCase().includes(q) || (a.task || '').toLowerCase().includes(q))
+        out.push({ label: a.id, sub: `agent · ${r.name}`, color: tint(a.id), room: r.id, agent: a.id });
+  }
+  return out.slice(0, 7);
+}
+function showResults() {
+  const rs = results(qEl.value);
+  $('#sres').innerHTML = rs.map((x, i) => `<button class="${i === 0 ? 'hl' : ''}" data-i="${i}"><span class="tile" style="width:22px;height:22px;font-size:11px;background:${x.color}">${esc(x.label[0].toUpperCase())}</span><span><b>${esc(x.label)}</b> <span class="mute">${esc(x.sub)}</span></span></button>`).join('')
+    || '<div class="mute" style="padding:8px 10px">Không thấy kết quả.</div>';
+  $('#sres').classList.add('open');
+  $('#sres').onclick = ev => { const b = ev.target.closest('button'); if (b) pickResult(rs[Number(b.dataset.i)]); };
+  return rs;
+}
+function pickResult(x) {
+  if (!x) return;
+  $('#sres').classList.remove('open'); qEl.value = ''; qEl.blur();
+  tab = 'Office'; openRoom(x.room);
+  if (x.agent) { agentId = x.agent; render(); }
+}
+qEl.addEventListener('input', showResults);
+qEl.addEventListener('focus', showResults);
+qEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter') pickResult(results(qEl.value)[0]);
+  if (e.key === 'Escape') { $('#sres').classList.remove('open'); qEl.blur(); }
+});
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); qEl.focus(); }
+});
+
+// ---- khởi động (bản chia sẻ: dữ liệu nhúng sẵn) ----
+D = {"workspace": "Hùng AI", "rooms": [{"id": "creative", "name": "Creative", "color": "#7C5CFF", "tools": [{"name": "Google Drive", "via": "MCP", "status": "connected"}, {"name": "ffmpeg", "via": "CLI", "status": "connected"}, {"name": "CapCut", "via": "MCP", "status": "connected"}, {"name": "Canva", "via": "MCP", "status": "connected"}], "skills": [{"name": "rough-cut", "progress": 71}, {"name": "captions-burn-in", "progress": 39}, {"name": "resize-for-reels", "progress": 59}, {"name": "thumbnail-maker", "progress": 55}, {"name": "hook-writer", "progress": 35}, {"name": "brand-check", "progress": null}, {"name": "music-bed", "progress": null}], "agents": [{"id": "video-editor", "role": "LEAD", "model": "sonnet", "status": "working", "task": "Cắt video Nhật 30s · 15s tiếp theo"}, {"id": "caption-bot", "role": "", "model": "haiku", "status": "working", "task": "Burn-in phụ đề"}, {"id": "thumb-bot", "role": "", "model": "haiku", "status": "idle", "task": ""}], "subagents": [{"id": "clip_01.mp4", "stage": "CUT", "progress": 20}, {"id": "clip_02.mp4", "stage": "CUT", "progress": 15}, {"id": "clip_03.mp4", "stage": "CUT", "progress": 8}], "stats": {"tasksToday": 18, "turnaroundMin": 14, "spark": {"tasks": [3, 5, 4, 8, 7, 11, 14, 18], "running": [1, 2, 2, 3, 4, 3, 5, 5], "turn": [22, 20, 19, 17, 18, 16, 15, 14]}}}, {"id": "research", "name": "Research", "color": "#3A6FE8", "tools": [{"name": "YouTube API", "via": "API", "status": "connected"}, {"name": "Web search", "via": "MCP", "status": "connected"}], "skills": [{"name": "storm-research", "progress": 55}, {"name": "comment-mining", "progress": null}], "agents": [{"id": "storm-lead", "role": "LEAD", "model": "opus", "status": "working", "task": "Storm research tuyến Nhật"}, {"id": "comment-miner", "role": "", "model": "haiku", "status": "idle", "task": ""}], "stats": {"tasksToday": 4, "turnaroundMin": 32, "spark": {"tasks": [1, 1, 2, 2, 3, 3, 4, 4], "running": [0, 1, 1, 1, 2, 1, 1, 1], "turn": [40, 38, 36, 35, 34, 33, 33, 32]}}}, {"id": "dev", "name": "Dev", "color": "#1FA35A", "tools": [{"name": "GitHub", "via": "MCP", "status": "connected"}], "skills": [{"name": "site-build", "progress": null}, {"name": "lint-brain", "progress": null}], "agents": [{"id": "site-builder", "role": "LEAD", "model": "sonnet", "status": "idle", "task": ""}], "stats": {"tasksToday": 2, "turnaroundMin": 9, "spark": {"tasks": [0, 1, 1, 1, 2, 2, 2, 2], "running": [0, 0, 1, 0, 0, 1, 0, 0], "turn": [12, 11, 10, 10, 9, 9, 9, 9]}}}, {"id": "ops", "name": "Ops", "color": "#E8833A", "tools": [{"name": "Scheduler", "via": "CLI", "status": "connected"}, {"name": "Google Sheets", "via": "MCP", "status": "connected"}], "skills": [{"name": "vph_tracker_daily", "progress": null, "job": "vph_tracker_daily"}], "agents": [{"id": "vph-runner", "role": "LEAD", "model": "haiku", "status": "idle", "task": "", "job": "vph_tracker_daily"}], "stats": {"tasksToday": 3, "turnaroundMin": 5, "spark": {"tasks": [1, 1, 1, 2, 2, 3, 3, 3], "running": [1, 1, 1, 1, 1, 1, 0, 0], "turn": [6, 6, 5, 5, 5, 5, 5, 5]}}}], "tasks": [{"id": 1, "title": "Cắt video Nhật 30s", "room": "creative", "status": "running"}, {"id": 2, "title": "Storm research tuyến Nhật", "room": "research", "status": "running"}, {"id": 3, "title": "VPH tracker hằng ngày", "room": "ops", "status": "running"}, {"id": 4, "title": "Đăng video lên kênh", "room": "creative", "status": "waiting_approval"}, {"id": 5, "title": "Deploy site demo", "room": "dev", "status": "waiting_approval"}], "calendar": [{"time": "09:00", "title": "Research: quét trend mới", "room": "research", "repeat": "hằng ngày", "fake": true}, {"time": "11:30", "title": "Creative: duyệt bản cắt", "room": "creative", "repeat": "thứ Ba, thứ Năm", "fake": true}, {"time": "14:00", "title": "vph_tracker_daily", "room": "ops", "repeat": "hằng ngày", "job": "vph_tracker_daily", "fake": false}, {"time": "17:00", "title": "Dev: backup brain lên GitHub", "room": "dev", "repeat": "thứ Sáu", "fake": true}], "toasts": [{"room": "research", "title": "Research", "text": "Found 3 new trending repos"}, {"room": "dev", "title": "Dev", "text": "tbx-site deployed ✓"}], "chats": {"video-editor": [{"from": "user", "time": "08:58", "text": "Cắt video Nhật xuống 30s, giữ cảnh mở đầu."}, {"from": "agent", "time": "09:03", "text": "Đã nhận. Bản thô 41s, đang cắt phần giới thiệu."}, {"from": "agent", "time": "09:12", "text": "Bản 30s xong. 15s và 9s làm tiếp. Xem v2 không?", "attachment": "nhat-30s-v2.mp4 · 0:30 · 1080×1920"}], "storm-lead": [{"from": "user", "time": "08:40", "text": "Chạy storm research tuyến Nhật."}, {"from": "agent", "time": "08:41", "text": "Đang gom nguồn, đã xong 55%."}]}, "brain": {"notes": 1842, "source": "okf-second-brain"}};
+overlay({"jobs": {"vph_tracker_daily": {"last_run": "2026-07-08 14:00", "rows": 120, "errors": 0, "zero_vph": 10, "zero_pct": 8.3, "log_status": "OK", "age_hours": 2400.0, "status": "stale", "history": ["2026-07-02", "2026-07-03", "2026-07-04", "2026-07-05", "2026-07-06", "2026-07-07", "2026-07-08"]}}});
+render();
+(D.toasts || []).forEach((t, i) => setTimeout(() => toast(t.room, t.title, t.text), 1200 + i * 2500));
+
+</script>
