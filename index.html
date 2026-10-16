@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Agent HQ Prototype</title>
 <style>
 :root { color-scheme: dark; }
@@ -140,6 +141,51 @@ body { position:relative; }
   .rooms { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; }
   .room { text-align:left; background:var(--card); border:1px solid var(--line); border-top:4px solid var(--c); border-radius:10px; padding:12px; cursor:pointer; }
 
+  /* ---- panel Tasks (trái, cảnh 3D vẫn chạy phía sau) ---- */
+  .chips { display:flex; gap:6px; margin:12px 0 2px; flex-wrap:wrap; }
+  .chips button { background:var(--card); border:1px solid var(--line); border-radius:99px; padding:3px 10px; font-size:12px; cursor:pointer; color:var(--mute); }
+  .chips button b { font:600 12px var(--mono); color:var(--text); margin-left:4px; }
+  .chips button.on { border-color:rgba(255,255,255,.35); color:var(--text); background:rgba(255,255,255,.09); }
+  h4 .gd { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:7px; vertical-align:1px; }
+  h4.g { justify-content:flex-start; }
+  .trow { padding:9px 10px; margin-bottom:6px; }
+  .trow .ic { width:22px; height:22px; border-radius:50%; display:grid; place-items:center; flex:none; font:700 12px var(--mono); }
+  .trow .ic.run { border:2px solid rgba(124,92,255,.3); border-top-color:var(--accent); animation:spin 1s linear infinite; }
+  .trow .ic.wait { background:rgba(232,179,58,.18); color:var(--warn); }
+  .trow .ic.done { background:rgba(25,195,125,.16); color:var(--ok); }
+  .trow .m b { font-size:13px; }
+  .trow .m div { font-size:11px; color:var(--mute); }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .rchip { display:inline-block; font:600 10px var(--mono); padding:1px 7px; border-radius:5px; color:#fff; margin-right:6px; }
+  .ring { --p:0; width:30px; height:30px; border-radius:50%; flex:none; display:grid; place-items:center; position:relative;
+    font:600 10px var(--mono); background:conic-gradient(var(--accent) calc(var(--p)*1%), rgba(255,255,255,.1) 0); }
+  .ring::before { content:''; position:absolute; inset:3px; border-radius:50%; background:#161a2b; }
+  .ring span { position:relative; }
+  .act.y { background:var(--warn); }
+  .btnrow { display:flex; gap:6px; flex:none; }
+  .face { display:block; border-radius:50%; flex:none; }
+  /* ---- voice ---- */
+  .orb { width:110px; height:110px; margin:30px auto 10px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #fff 0, #d3c3ff 18%, #8a6bff 55%, #4a6dff 100%); box-shadow:0 0 44px rgba(124,92,255,.55); animation:breathe 2s ease-in-out infinite; }
+  @keyframes breathe { 50% { transform:scale(1.08); } }
+  .orbl { text-align:center; font:11px var(--mono); letter-spacing:.2em; color:var(--mute); margin-bottom:20px; }
+  .vin { flex:1; min-width:0; display:flex; gap:8px; align-items:center; background:rgba(255,255,255,.05); border:1px solid rgba(232,115,106,.55);
+    border-radius:12px; padding:0 12px; font-size:13px; min-height:40px; }
+  .vin .t { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .wave { display:flex; gap:2px; align-items:center; height:20px; flex:none; }
+  .wave i { width:2px; height:100%; background:#e8736a; border-radius:2px; animation:wv .9s ease-in-out infinite; }
+  @keyframes wv { 50% { transform:scaleY(.25); } }
+  form.send .mic.on { background:#e8503a; color:#fff; }
+  .cursor::after { content:'▍'; opacity:.6; animation:wv 1s steps(2) infinite; }
+  /* ---- banner ghim khi zoom vào phòng ---- */
+  #banner { position:absolute; z-index:24; top:72px; left:50%; transform:translateX(-50%); display:none; align-items:center; gap:10px;
+    padding:6px 12px 6px 8px; background:var(--glass); backdrop-filter:blur(10px); border:1px solid var(--c, var(--line));
+    box-shadow:0 0 18px -4px var(--c, transparent); border-radius:12px; font-size:12px; white-space:nowrap; }
+  #banner.open { display:flex; }
+  #banner .faces { display:flex; margin-left:2px; } #banner .faces .face { margin-left:-6px; border:1.5px solid #12162a; }
+  .sub .st span.done { color:#7ee8b7; background:rgba(25,195,125,.14); border-color:rgba(25,195,125,.5); }
+
+  @media (max-width:1100px) { #banner { display:none !important; } }
   @media (max-width:1100px) { .ws, .search kbd { display:none; } }
   @media (max-width:860px) { .chip { display:none; } }
   @media (max-width:700px) {
@@ -178,6 +224,7 @@ body { position:relative; }
 <div id="view" hidden></div>
 <div id="toasts"></div>
 <div id="subs"></div>
+<div id="banner"></div>
 <aside id="detail"></aside>
 <div id="runs"><span style="background:none;padding:0">RUNS ON</span><span data-m="opus">Opus</span><span data-m="sonnet">Sonnet</span><span data-m="haiku">Haiku</span><span>headless · cloud</span></div>
 <div id="map">
@@ -191,7 +238,8 @@ body { position:relative; }
 <script>
 // Lớp 3: cảnh 3D "văn phòng" bằng Three.js (0.160, bản UMD). Chỉ vẽ, không giữ sự thật: đọc rooms/agents từ data đã phủ state (lớp 1+2).
 // Dựng bằng hình khối, camera isometric (orthographic). Kéo = pan, lăn chuột = zoom, bấm phòng = onPick(roomId).
-// API: mount(el, data, onPick, onTick) -> { draw, select, focusRoom, resetView, zoomBy, info, destroy }
+// API: mount(el, data, onPick, onTick) -> { draw, select, focusRoom, resetView(shiftPx), zoomBy, info, destroy,
+//      setNotes(n), setAgentTag(id, text), pulseRoom(id, ms), setSubs(roomId, [{label,text,done}]) }
 (function () {
   const T = window.THREE;
   const STATE_COLOR = { stale: 0xE8B33A, error: 0xE8503A };
@@ -224,6 +272,15 @@ body { position:relative; }
     .lbl.room.sel .act { display:block; }
     .lbl.room .faces { display:flex; margin-left:4px; }
     .lbl.room .faces u { width:14px; height:14px; border-radius:50%; border:1.5px solid #12162a; margin-left:-4px; text-decoration:none; }
+    .lbl.room.busy { border-color:var(--c); box-shadow:0 0 0 1px var(--c), 0 0 22px -2px var(--c); }
+    .lbl.room.busy:not(.sel) .sub { display:none; }
+    .lbl.room.busy .act { display:block; }
+    .lbl.sched { display:flex; gap:8px; align-items:center; padding:5px 10px 5px 5px; text-align:left; }
+    .lbl.sched .dt { background:#E5415F; color:#fff; border-radius:7px; padding:4px 6px; text-align:center; font:700 10px/1.15 ui-monospace,Consolas,monospace; }
+    .lbl.sched b { display:block; font-size:12px; } .lbl.sched .s { font-size:11px; color:#9aa3b8; }
+    .lbl.subtag { text-align:center; font:10px/1.3 ui-monospace,Consolas,monospace; padding:1px 7px; border-radius:7px; }
+    .lbl.subtag b { display:block; font-size:11px; font-weight:600; }
+    .lbl.subtag.done { color:#7ee8b7; }
   `;
   document.head.appendChild(css);
 
@@ -232,6 +289,10 @@ body { position:relative; }
   function roomState(r) {
     const a = r.agents.find(x => x.status === 'stale' || x.status === 'error');
     return a ? a.status : null;
+  }
+  // nhãn agent: chấm trạng thái + tên + (listening | delegating | ...)
+  function renderTag(t) {
+    t.div.innerHTML = `<i class="${t.dot}"></i>${esc(t.id)}${t.text ? ' · ' + esc(t.text) : ''}`;
   }
 
   function mount(el, data, onPick, onTick) {
@@ -284,9 +345,12 @@ body { position:relative; }
     brain.add(disc, ring, orb, mesh, beam);
     scene.add(brain);
     const brainTarget = new T.Object3D(); brainTarget.position.set(0, 3.4, 0); scene.add(brainTarget);
-    addLabel(`<b>THE BRAIN</b><span>${esc(data.brain.notes.toLocaleString('en-US'))} notes · shared memory</span>`, brainTarget, 'brain');
+    const brainLab = addLabel('', brainTarget, 'brain');
+    const setNotes = n => { brainLab.innerHTML = `<b>THE BRAIN</b><span>${esc(Number(n).toLocaleString('en-US'))} notes · shared memory</span>`; };
+    setNotes(data.brain.notes);
 
     // phòng quanh brain
+    const agentTags = {}; // agentId -> { div, id, dot, text }
     const rooms = [];
     const pickables = [];
     const n = data.rooms.length;
@@ -345,10 +409,13 @@ body { position:relative; }
         }
         const anchor = new T.Object3D(); anchor.position.set(sx, 1.6, sz + 0.2); g.add(anchor);
         const dotCls = ['working', 'stale', 'error'].includes(a.status) ? a.status : '';
-        addLabel(`<i class="${dotCls}"></i>${esc(a.id)}`, anchor, 'agent');
+        const div = addLabel('', anchor, 'agent');
+        agentTags[a.id] = { div, id: a.id, dot: dotCls, text: '' };
+        renderTag(agentTags[a.id]);
       });
 
-      // SUB-AGENT BAY: viền nét đứt trên sàn nếu phòng có sub-agent
+      // SUB-AGENT BAY: viền nét đứt trên sàn + chỗ ngồi cho sub-agent (hiện khi đang chạy)
+      let bayLab = null; const subSeats = [];
       if (r.subagents && r.subagents.length) {
         const pts = [[-2.1, 2.0], [1.4, 2.0], [1.4, 2.4], [-2.1, 2.4], [-2.1, 2.0]].map(([x, z]) => new T.Vector3(x, 0.28, z));
         const bay = new T.Line(new T.BufferGeometry().setFromPoints(pts),
@@ -356,8 +423,33 @@ body { position:relative; }
         bay.computeLineDistances();
         g.add(bay);
         const ba = new T.Object3D(); ba.position.set(-0.4, 0.3, 2.2); g.add(ba);
-        addLabel('SUB-AGENT BAY · ready', ba, 'bay');
+        bayLab = addLabel('SUB-AGENT BAY · ready', ba, 'bay');
+        r.subagents.forEach((s, j) => {
+          const sx = -1.6 + j * 1.15, sz = 2.0;
+          const seat = new T.Group();
+          const sdesk = box(0.8, 0.07, 0.4, mat(0xe8dcc4)); sdesk.position.set(sx, 0.6, sz - 0.3);
+          const sscr = box(0.4, 0.28, 0.04, mat(0x1b2236, { emissive: 0x3a6cff, emissiveIntensity: 0.8 })); sscr.position.set(sx, 0.9, sz - 0.45);
+          const sbody = new T.Mesh(new T.CylinderGeometry(0.14, 0.17, 0.45, 12), mat(PALETTE[(j + 3) % PALETTE.length])); sbody.position.set(sx, 0.5, sz + 0.1);
+          const shead = new T.Mesh(new T.SphereGeometry(0.13, 14, 10), mat(0xf1c9a5)); shead.position.set(sx, 0.86, sz + 0.1);
+          seat.add(sdesk, sscr, sbody, shead);
+          g.add(seat);
+          const sa = new T.Object3D(); sa.position.set(sx, 1.3, sz + 0.1); g.add(sa);
+          const slab = addLabel('', sa, 'subtag');
+          subSeats.push({ seat, slab });
+        });
       }
+      // thẻ lịch gắn trong 3D (từ calendar có card)
+      (data.calendar || []).filter(c => c.room === r.id && c.card).forEach(c => {
+        const sa = new T.Object3D(); sa.position.set(1.2, 2.5, 1.4); g.add(sa);
+        addLabel(`<span class="dt">${esc(c.card.day)}<br>${esc(c.time)}</span><span><b>${esc(c.title.replace(/^[^:]+:\s*/, ''))}</b><span class="s">${esc(c.repeat)} · ${c.fake ? 'mẫu' : 'scheduled ✓'}</span></span>`, sa, 'sched');
+      });
+      // viền neon quanh sàn, bật khi phòng có sự kiện
+      const edgeMat = mat(accent, { emissive: accent, emissiveIntensity: 1.8 });
+      const edge = new T.Group();
+      [[0, -2.55, 5.2, 0.1], [0, 2.55, 5.2, 0.1], [-2.55, 0, 0.1, 5.2], [2.55, 0, 0.1, 5.2]].forEach(([ex, ez, ew, ed]) => {
+        const e = box(ew, 0.1, ed, edgeMat); e.position.set(ex, 0.3, ez); edge.add(e);
+      });
+      edge.visible = false; g.add(edge);
       g.traverse(o => { if (o.isMesh) pickables.push(o); });
       scene.add(g);
 
@@ -403,7 +495,7 @@ body { position:relative; }
       walker.add(wb, wh);
       scene.add(walker);
       rooms.push({ id: r.id, color: hex(accent), x: g.position.x, z: g.position.z, floorMat, curve, dot, lab,
-        working: run > 0 && !st, p: i / n, glows, walker, angle, wp: i * 0.5 });
+        working: run > 0 && !st, p: i / n, glows, walker, angle, wp: i * 0.5, edge, bayLab, subSeats, pulseUntil: 0 });
     });
 
     // kích thước + camera isometric
@@ -475,6 +567,8 @@ body { position:relative; }
         const bob = r.working ? Math.abs(Math.sin(t * 8 + r.wp * 10)) * 0.06 : 0;
         r.walker.position.set(Math.cos(r.angle) * rad - Math.sin(r.angle) * 0.2, bob, Math.sin(r.angle) * rad + Math.cos(r.angle) * 0.2);
         r.glows.forEach(({ glow, head }, k2) => { glow.scale.setScalar(1 + Math.sin(t * 3 + k2) * 0.12); head.position.y = 1.15 + Math.sin(t * 3 + k2) * 0.02; });
+        const hot = now < r.pulseUntil; // sự kiện mới: viền neon + nhãn phòng sáng
+        if (r.edge.visible !== hot) { r.edge.visible = hot; r.lab.classList.toggle('busy', hot); }
       });
       const w = el.clientWidth, h = el.clientHeight;
       labels.forEach(({ div, obj }) => {
@@ -505,7 +599,24 @@ body { position:relative; }
         const Ht = 4.6, u = (2 * Ht) / (el.clientHeight || 1);
         tgt = { fx: r.x - 0.707 * shiftPx * u, fz: r.z + 0.707 * shiftPx * u, H: Ht };
       },
-      resetView() { tgt = { fx: 0, fz: 0, H: H0 }; },
+      // shiftPx > 0: dời toàn cảnh sang phải để chừa chỗ cho panel trái
+      resetView(shiftPx = 0) { const u = (2 * H0) / (el.clientHeight || 1); tgt = { fx: -0.707 * shiftPx * u, fz: 0.707 * shiftPx * u, H: H0 }; },
+      setNotes,
+      setAgentTag(id, text) { const t = agentTags[id]; if (t) { t.text = text || ''; renderTag(t); } },
+      pulseRoom(id, ms = 6000) { const r = rooms.find(x => x.id === id); if (r) r.pulseUntil = performance.now() + ms; },
+      // subs: [{ label, text, done }] theo thứ tự data.rooms[].subagents
+      setSubs(id, subs) {
+        const r = rooms.find(x => x.id === id);
+        if (!r || !r.bayLab) return;
+        const active = subs.filter(s => !s.done).length;
+        r.bayLab.textContent = active ? `SUB-AGENT BAY · ${active} running` : 'SUB-AGENT BAY · ready';
+        r.subSeats.forEach((sl, j) => {
+          const s = subs[j]; if (!s) return;
+          sl.seat.visible = active > 0; sl.slab.style.display = active > 0 ? '' : 'none';
+          sl.slab.innerHTML = `<b>Sub ${j + 1} · ${esc(s.label)}</b>${esc(s.text)}`;
+          sl.slab.classList.toggle('done', !!s.done);
+        });
+      },
       zoomBy(f) { tgt = { fx: focus.x, fz: focus.z, H: Math.min(22, Math.max(4, H * f)) }; },
       // cho minimap: toạ độ màn hình "iso" của phòng + khung nhìn hiện tại
       info() {
@@ -536,6 +647,32 @@ const COLORS = ['#7C5CFF', '#3A6FE8', '#1FA35A', '#E8833A', '#E58FB0', '#3AB8E8'
 const tint = s => COLORS[[...String(s)].reduce((a, c) => a + c.charCodeAt(0), 0) % COLORS.length];
 const JOB_LABEL = { ok: 'chạy OK', stale: 'quá hạn', error: 'lỗi', unknown: 'không rõ' };
 const MOBILE = () => innerWidth <= 700;
+
+// ---- helper mới: avatar mặt, sub-agent, task, đếm ----
+const STAGES = ['CUT', 'CAPTIONS', 'THUMBNAIL'], STAGE_TXT = ['cutting', 'captions', 'thumbnail'];
+let taskFilter = 'all', voice = null, stream = null, doneTicks = 0, liveN = 0, lastPanel = '';
+const reviewing = new Set();
+const subDone = s => s.i >= 3;
+const subTxt = s => subDone(s) ? 'done ✓' : `${STAGE_TXT[s.i]} · ${Math.round(s.progress)}%`;
+const subLabel = s => s.id.replace(/\.[^.]+$/, '');
+const subsActive = r => (r.subagents || []).filter(s => !subDone(s)).length;
+function face(id, size = 32) {
+  const h = [...String(id)].reduce((a, c) => a + c.charCodeAt(0), 0);
+  const skin = ['#f1c9a5', '#d9a47a', '#a8734d', '#f6d7bd'][h % 4], hair = ['#3b2a22', '#c9531e', '#f0c14b', '#2b2b35', '#8a5a44'][h % 5], bg = COLORS[h % COLORS.length];
+  const glasses = h % 3 === 0 ? '<g fill="none" stroke="#222" stroke-width="1.2"><circle cx="14.5" cy="20" r="3.2"/><circle cx="21.5" cy="20" r="3.2"/><path d="M17.7 20h.6"/></g>' : '';
+  return `<svg class="face" width="${size}" height="${size}" viewBox="0 0 36 36"><circle cx="18" cy="18" r="18" fill="${bg}"/><circle cx="18" cy="20" r="9" fill="${skin}"/>` +
+    `<path d="M8.5 19a9.5 9.5 0 0 1 19 0c-3-3-6-4-9.5-4s-6.500 1-9.500 4z" fill="${hair}"/><circle cx="14.500" cy="21" r="1" fill="#222"/><circle cx="21.500" cy="21" r="1" fill="#222"/>${glasses}</svg>`;
+}
+// task đã được duyệt/từ chối (queue) chuyển sang nhóm Done
+const effTasks = () => { const d = decided(); return D.tasks.map(t => d[t.id] ? { ...t, status: 'done', ago: d[t.id] === 'approve' ? 'đã duyệt' : 'đã từ chối' } : t); };
+function counts() {
+  const ts = effTasks(), c = s => ts.filter(t => t.status === s).length;
+  return { all: ts.length, running: c('running'), waiting: c('waiting_approval'), done: c('done') };
+}
+function chipText() {
+  const ag = D.rooms.flatMap(r => r.agents), sa = D.rooms.reduce((n, r) => n + subsActive(r), 0);
+  return `${ag.length + sa} agents · ${ag.filter(a => a.status === 'working').length + sa} running`;
+}
 
 // ---- dữ liệu ----
 function overlay(state) {
@@ -580,14 +717,16 @@ function toast(room, title, text) {
   box.prepend(el);
   while (box.children.length > 3) box.lastChild.remove();
   setTimeout(() => el.remove(), 7000);
+  if (r && scene) scene.pulseRoom(room, 6000); // phòng có sự kiện: viền neon + nhãn sáng
 }
 
 // ---- điều hướng ----
 function openRoom(id) {
-  roomId = id; roomTab = 'Overview'; agentId = null; render();
+  tab = 'Office'; roomId = id; roomTab = 'Overview'; agentId = null; render();
   if (scene) scene.focusRoom(id, MOBILE() ? 0 : 190);
 }
-function closeRoom() { roomId = null; agentId = null; render(); if (scene) scene.resetView(); }
+const panelShift = () => (tab === 'Tasks' && !MOBILE() ? 190 : 0);
+function closeRoom() { stopVoice(); roomId = null; agentId = null; render(); if (scene) scene.resetView(panelShift()); }
 
 // ---- vẽ ----
 function sparkline(vals, color) {
@@ -597,15 +736,13 @@ function sparkline(vals, color) {
 }
 
 function render() {
-  const decs = decided();
-  const waiting = D.tasks.filter(t => t.status === 'waiting_approval' && !decs[t.id]).length;
-  const openTasks = D.tasks.filter(t => !decs[t.id]).length;
+  const cn = counts();
   $('#ws').textContent = D.workspace;
   const agents = D.rooms.flatMap(r => r.agents);
-  $('#chip').textContent = `${agents.length} agents · ${agents.filter(a => a.status === 'working').length} running`;
-  $('#bellN').textContent = waiting; $('#bellN').hidden = !waiting;
+  $('#chip').textContent = chipText();
+  $('#bellN').textContent = cn.waiting; $('#bellN').hidden = !cn.waiting;
   $('#tabs').innerHTML = ['Office', 'Tasks', 'Calendar', 'Brain'].map(t =>
-    `<button class="tab ${t === tab ? 'on' : ''}" data-tab="${t}">${t}${t === 'Tasks' ? `<span class="n">${openTasks}</span>` : ''}</button>`).join('');
+    `<button class="tab ${t === tab ? 'on' : ''}" data-tab="${t}">${t}${t === 'Tasks' ? `<span class="n" id="runN">${cn.running}</span>` : ''}</button>`).join('');
   const active = new Set(agents.filter(a => a.status === 'working').map(a => a.model));
   document.querySelectorAll('#runs [data-m]').forEach(s => s.classList.toggle('on', active.has(s.dataset.m)));
 
@@ -613,14 +750,27 @@ function render() {
   if (has3d && !scene) {
     scene = OfficeScene.mount($('#stage'), D, openRoom, drawMap);
   }
-  const showStage = tab === 'Office' && has3d;
+  const showStage = (tab === 'Office' || tab === 'Tasks') && has3d; // Tasks = panel trái, cảnh 3D vẫn hiện
   $('#stage').hidden = !showStage;
   $('#map').hidden = !showStage; $('#runs').hidden = !showStage;
   $('#view').hidden = showStage;
   if (scene) scene.select(roomId);
   if (!showStage) $('#view').innerHTML = { Office: officeFallback, Tasks: tasksView, Calendar: calendarView, Brain: brainView }[tab]();
   renderDetail();
+  renderBanner();
   renderSubs();
+}
+
+// banner ghim dưới thanh tab khi zoom vào phòng: tên + việc đang làm + mặt agent
+function renderBanner() {
+  const r = roomId && roomOf(roomId), b = $('#banner');
+  b.classList.toggle('open', !!r);
+  if (!r) return;
+  const lead = r.agents.find(a => a.role === 'LEAD') || r.agents[0];
+  b.style.setProperty('--c', r.color);
+  b.innerHTML = `<span class="tile" style="background:${r.color}">${esc(r.name[0])}</span>
+    <span><b>${esc(r.name)}</b> <span class="mute">· ${esc(lead.task || `${r.agents.length} agents · ${running(r)} running`)}</span></span>
+    <span class="faces">${r.agents.slice(0, 3).map(a => face(a.id, 20)).join('')}</span>`;
 }
 
 function officeFallback() {
@@ -629,21 +779,39 @@ function officeFallback() {
     <div class="mute">${r.agents.length} agents · ${running(r)} running</div></button>`).join('')}</div></div>`;
 }
 
-function tasksView() {
-  const decs = decided();
-  const right = t => {
-    if (t.status !== 'waiting_approval') return `<span class="pillst working">đang chạy</span>`;
-    if (decs[t.id]) return `<span class="pillst">${decs[t.id] === 'approve' ? 'đã duyệt' : 'đã từ chối'}</span>`;
-    return `<span><button class="act" data-t="${t.id}" data-d="approve">Duyệt</button> <button class="act no" data-t="${t.id}" data-d="reject">Từ chối</button></span>`;
-  };
+// Panel "Task status": chip lọc, 3 nhóm (running / waiting / done), vòng % chạy sống, Approve vs Review
+function taskRow(t) {
+  const r = roomOf(t.room);
+  const sub = `<span class="rchip" style="background:${r.color}">${esc(r.name)}</span>${esc(t.owner || t.note || t.ago || '')}${t.fake ? ' <span class="fake">mẫu</span>' : ''}`;
+  if (t.status === 'running') {
+    const right = t.progress == null ? '<span class="pillst working">đang chạy</span>'
+      : `<span class="ring" data-ring="${t.id}" style="--p:${t.progress}"><span>${Math.round(t.progress)}</span></span>`;
+    return `<div class="row trow"><span class="ic run"></span><span class="m"><b>${esc(t.title)}</b><div>${sub}</div></span>${right}</div>`;
+  }
+  if (t.status === 'waiting_approval') {
+    const rv = t.action === 'review' && !reviewing.has(t.id);
+    const btns = rv ? `<button class="act no" data-rv="${t.id}">Review</button>`
+      : `<button class="act y" data-t="${t.id}" data-d="approve">Approve</button><button class="act no" data-t="${t.id}" data-d="reject">Reject</button>`;
+    return `<div class="row trow"><span class="ic wait">!</span><span class="m"><b>${esc(t.title)}</b><div>${sub}</div></span><span class="btnrow">${btns}</span></div>`;
+  }
+  return `<div class="row trow"><span class="ic done">✓</span><span class="m"><b>${esc(t.title)}</b><div>${sub}</div></span></div>`;
+}
+function tasksPanel() {
+  const ts = effTasks(), cn = counts();
+  const G = [['running', 'RUNNING', '#3A8DE8', cn.running], ['waiting_approval', 'WAITING FOR YOU', '#E8B33A', cn.waiting], ['done', 'DONE TODAY', '#19c37d', cn.done]];
+  const F = [['all', 'All', cn.all], ['running', 'Running', cn.running], ['waiting_approval', 'Waiting', cn.waiting], ['done', 'Done', cn.done]];
   const reqs = Q.entries.filter(e => e.type === 'request');
-  return `<div class="wrap"><h2>Tasks</h2>
-    ${D.tasks.map(t => { const r = roomOf(t.room); return `<div class="row"><span class="tile" style="background:${r.color}">${esc(r.name[0])}</span>
-      <span class="m"><b>${esc(t.title)}</b><div class="mute">${esc(r.name)}</div></span>${right(t)}</div>`; }).join('')}
+  return `<div class="ph"><span class="tile" style="background:#3A8DE8;width:36px;height:36px;font-size:18px">≡</span>
+      <div><h3>Task status</h3><div class="mute" style="font-size:12px">Whole office · today</div></div><button class="x" data-close>×</button></div>
+    <div class="chips">${F.map(([k, l, n]) => `<button class="${k === taskFilter ? 'on' : ''}" data-flt="${k}">${l}<b>${n}</b></button>`).join('')}</div>
+    ${G.filter(g => taskFilter === 'all' || g[0] === taskFilter).map(([st, label, color, n]) =>
+      `<h4 class="g"><span class="gd" style="background:${color}"></span>${label} · ${n}</h4>` +
+      (ts.filter(t => t.status === st).map(taskRow).join('') || '<div class="mute" style="font-size:12px">Không có.</div>')).join('')}
     <h4>Hàng đợi (${reqs.length})<span class="pill">${Q.online ? '' : 'chưa kết nối server.py'}</span></h4>
     ${reqs.length ? reqs.map(e => `<div class="row"><span class="m">${esc(e.text)}<div class="mute mono">${esc(e.agent || e.room)} · ${esc(e.ts)}</div></span><span class="pillst">${esc(e.status)}</span></div>`).join('')
-      : '<div class="mute">Chưa có yêu cầu nào. Gửi tin cho agent để thả vào đây.</div>'}</div>`;
+      : '<div class="mute" style="font-size:12px">Chưa có yêu cầu nào. Gửi tin cho agent để thả vào đây.</div>'}`;
 }
+function tasksView() { return `<div class="wrap">${tasksPanel()}</div>`; } // dự phòng khi không có WebGL
 
 function calendarView() {
   const rows = [...D.calendar].sort((a, b) => a.time.localeCompare(b.time));
@@ -658,19 +826,31 @@ function calendarView() {
 
 function brainView() {
   return `<div class="wrap"><h2>Brain</h2><div class="row" style="flex-direction:column;align-items:flex-start">
-    <span class="big">${D.brain.notes.toLocaleString('en-US')}</span><span class="mute">notes · shared memory · nguồn ${esc(D.brain.source)} (số giả)</span></div></div>`;
+    <span class="big" data-notes>${D.brain.notes.toLocaleString('en-US')}</span><span class="mute">notes · shared memory · nguồn ${esc(D.brain.source)} (số giả)</span></div></div>`;
 }
 
 function renderSubs() {
   const r = roomId && roomOf(roomId);
   const subs = (r && r.subagents) || [];
+  // pill: xong = xanh, đang chạy = viền + gạch tiến độ, chờ = xám
   $('#subs').innerHTML = subs.map((s, i) => `<div class="sub"><b>Sub-agent ${i + 1} · ${esc(s.id)}</b>
-    <div class="st">${['CUT', 'CAPTIONS', 'THUMBNAIL'].map(p => `<span class="${p === s.stage ? 'on' : ''}">${p}${p === s.stage ? `<i style="width:${s.progress}%"></i>` : ''}</span>`).join('')}</div></div>`).join('');
+    <div class="st">${STAGES.map((p, k) => `<span class="${k < s.i ? 'done' : k === s.i ? 'on' : ''}">${p}${k === s.i ? `<i style="width:${s.progress}%"></i>` : ''}</span>`).join('')}</div></div>`).join('');
 }
 
+// giữ vị trí cuộn của panel khi vẽ lại cùng một màn; đổi màn thì về đầu
 function renderDetail() {
+  const el = $('#detail'), sc = el.scrollTop, key = [tab, roomId, agentId, roomTab].join('|');
+  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  renderDetail0();
+  // chat: vào mới hoặc đang ở cuối thì cuộn xuống tin mới nhất
+  el.scrollTop = agentId && (key !== lastPanel || atBottom) ? el.scrollHeight : key === lastPanel ? sc : 0;
+  lastPanel = key;
+}
+function renderDetail0() {
   const el = $('#detail'), r = roomId && roomOf(roomId);
-  el.classList.toggle('open', !!r);
+  const tasksOpen = tab === 'Tasks' && !r && !$('#stage').hidden;
+  el.classList.toggle('open', !!r || tasksOpen);
+  if (tasksOpen) { el.innerHTML = tasksPanel(); return; }
   if (!r) return;
   if (agentId) return renderChat(el, r);
   const lead = r.agents.find(a => a.role === 'LEAD') || r.agents[0];
@@ -682,13 +862,13 @@ function renderDetail() {
   if (roomTab === 'Overview') {
     body = `<div class="cards">${stat('Tasks today', r.stats.tasksToday, sp.tasks, '#7C5CFF')}${stat('Running', running(r), sp.running, '#19c37d')}${stat('Avg turnaround', r.stats.turnaroundMin + 'm', sp.turn, '#3A8DE8')}</div>
       <h4>Connected tools<span class="pill">${live} live</span></h4>
-      <div class="tools">${r.tools.map(t => `<div class="tool"><span class="tile" style="background:${tint(t.name)}">${esc(t.name[0])}</span>
+      <div class="tools">${r.tools.map(t => `<div class="tool"><span class="tile" style="background:${t.color || tint(t.name)}">${esc(t.glyph || t.name[0])}</span>
         <span><b>${esc(t.name)}</b><span><i></i>Connected · ${esc(t.via)}</span></span></div>`).join('')}</div>
       <h4>Skills<span class="pill">${par ? par + ' running in parallel' : ''}</span></h4>
-      ${r.skills.map(s => { const on = s.progress != null && s.progress < 100; return `<div class="sk"><span class="d ${on ? 'on' : ''}"></span><span>${esc(s.name)}</span>
-        <span class="bar"><i style="width:${s.progress ?? 0}%"></i></span><span class="p">${s.progress == null ? esc(s.label || 'idle') : s.progress + '%'}</span></div>`; }).join('')}
+      ${r.skills.map(s => { const on = s.progress != null && s.progress < 100; return `<div class="sk" data-sk="${esc(r.id + '/' + s.name)}"><span class="d ${on ? 'on' : ''}"></span><span>${esc(s.name)}</span>
+        <span class="bar"><i style="width:${s.progress ?? 0}%"></i></span><span class="p">${s.progress == null ? esc(s.label || 'idle') : Math.round(s.progress) + '%'}</span></div>`; }).join('')}
       <h4>Agents</h4>
-      ${r.agents.map(a => `<button class="ag" data-agent="${esc(a.id)}"><span class="av" style="background:${tint(a.id)}">${esc(a.id[0].toUpperCase())}</span>
+      ${r.agents.map(a => `<button class="ag" data-agent="${esc(a.id)}">${face(a.id, 32)}
         <span class="m"><b>${esc(a.id)}</b>${a.role ? `<span class="lead">${esc(a.role)}</span>` : ''}<div>${esc(a.task || 'idle')}</div>
         ${a.jobInfo ? `<div>7 lần gần nhất: ${esc(a.jobInfo.history.map(d => d.slice(5)).join(', '))}</div>` : ''}</span>
         <span class="pillst ${a.status}">${a.status === 'stale' ? 'quá hạn' : a.status === 'error' ? 'lỗi' : esc(a.status)}</span></button>`).join('')}`;
@@ -705,19 +885,69 @@ function renderDetail() {
 }
 
 // Khung chat agent: tin giả từ data.json; gửi tin = thả yêu cầu vào hàng đợi (lớp 6), chưa có worker chạy.
+const subRow = (s, i) => `<div class="file" data-subrow="${i}"><span class="pl">▶</span><span><b>${esc(s.id)}</b><span>${esc(subTxt(s))}</span></span></div>`;
 function renderChat(el, r) {
   const a = r.agents.find(x => x.id === agentId);
   const msgs = (D.chats[agentId] ??= []);
+  const wave = [...Array(14)].map((_, i) => `<i style="animation-delay:${(i % 7) * 0.12}s"></i>`).join('');
+  const who = m => m.from === 'user' ? (m.via === 'voice' ? 'YOU · VOICE' : 'YOU') : esc(agentId);
   el.innerHTML = `<div class="ph"><button class="back" data-back>← ${esc(r.name)}</button><button class="x" data-close>×</button></div>
-    <div class="ph" style="margin-top:8px"><span class="av" style="width:36px;height:36px;background:${tint(agentId)}">${esc(agentId[0].toUpperCase())}</span>
+    <div class="ph" style="margin-top:8px">${face(agentId, 36)}
     <div><h3>${esc(agentId)}${a.role ? `<span class="lead">${esc(a.role)}</span>` : ''}</h3>
     <div class="mute" style="font-size:12px">${esc(a.model)} · ${esc(a.task || 'idle')}</div></div></div>
-    <div class="msgs">${msgs.length ? msgs.map(m => `<div class="msg ${m.from}"><div class="who">${m.from === 'user' ? 'YOU' : esc(agentId)} · ${esc(m.time)}</div><div>${esc(m.text)}</div>
+    ${voice ? '<div class="orb"></div><div class="orbl">LISTENING</div>' : `<div class="msgs">${msgs.length ? msgs.map(m => `<div class="msg ${m.from}"><div class="who">${who(m)} · ${esc(m.time)}</div><div>${esc(m.text)}${m.live ? '<span class="cursor"></span>' : ''}</div>
       ${m.attachment ? `<div class="file"><span class="pl">▶</span><span><b>${esc(m.attachment.split(' · ')[0])}</b><span>${esc(m.attachment.split(' · ').slice(1).join(' · '))}</span></span></div>` : ''}
-      ${m.note ? `<div class="note">${esc(m.note)}</div>` : ''}</div>`).join('') : '<div class="mute">Chưa có tin nhắn.</div>'}</div>
-    <form class="send" id="f"><input id="in" placeholder="Message the agent…" autocomplete="off">
-    <button type="button" class="mic" title="Giọng nói (chưa làm)">●</button><button class="go" title="Gửi">➤</button></form>`;
-  const m = el.querySelector('.msgs'); m.scrollTop = m.scrollHeight;
+      ${m.subs ? (r.subagents || []).map(subRow).join('') : ''}
+      ${m.note ? `<div class="note">${esc(m.note)}</div>` : ''}</div>`).join('') : '<div class="mute">Chưa có tin nhắn.</div>'}</div>`}
+    <form class="send" id="f">${voice ? `<div class="vin"><span class="wave">${wave}</span><span class="t">${esc(voice.text) || 'Listening…'}</span></div>`
+      : '<input id="in" placeholder="Message the agent…" autocomplete="off">'}
+    <button type="button" class="mic ${voice ? 'on' : ''}" data-mic title="Giọng nói (giả lập)">●</button><button class="go" title="Gửi">➤</button></form>`;
+}
+
+// ---- voice giả lập: orb + sóng + chữ chạy dần; gửi = thả yêu cầu vào hàng đợi như tin gõ ----
+const VOICE_PHRASE = 'Lấy 3 clip mới từ Drive và dựng song song nhé.';
+function stopVoice() {
+  if (voice) { clearInterval(voice.timer); voice = null; if (scene && agentId) scene.setAgentTag(agentId, ''); }
+}
+function startVoice() {
+  if (voice) { stopVoice(); return render(); }
+  voice = { text: '', i: 0 };
+  if (scene) scene.setAgentTag(agentId, 'listening');
+  voice.timer = setInterval(() => {
+    if (!voice) return;
+    voice.i = Math.min(VOICE_PHRASE.length, voice.i + 1);
+    voice.text = VOICE_PHRASE.slice(0, voice.i);
+    if (voice.i >= VOICE_PHRASE.length) clearInterval(voice.timer);
+    const t = document.querySelector('.vin .t'); if (t) t.textContent = voice.text;
+  }, 70);
+  render();
+}
+async function sendVoice() {
+  const r = roomOf(roomId), who = agentId, text = voice.text.trim();
+  if (!r || !text) return;
+  stopVoice();
+  const time = new Date().toTimeString().slice(0, 5), chat = (D.chats[who] ??= []);
+  chat.push({ from: 'user', via: 'voice', time, text });
+  const reply = { from: 'agent', time, text: '', live: true };
+  chat.push(reply);
+  if (scene) scene.setAgentTag(who, 'delegating');
+  render(); // hiện ngay bong bóng YOU · VOICE, không chờ server
+  try { await post('/api/requests', { room: r.id, agent: who, text }); } catch (e) { /* chưa chạy server.py: chỉ demo */ }
+  const full = 'Đã nhận. Kéo 3 clip từ Drive, tách 3 sub-agent: cắt, phụ đề, thumbnail chạy song song.';
+  let i = 0;
+  const iv = setInterval(() => {
+    i += 2; reply.text = full.slice(0, i);
+    if (i >= full.length) {
+      clearInterval(iv); reply.text = full; reply.live = false;
+      setTimeout(() => scene && scene.setAgentTag(who, ''), 1500);
+      if ((r.subagents || []).length) {
+        restartSubs(r);
+        if (!chat.some(m => m.subs)) chat.push({ from: 'agent', time, text: 'Tiến độ từng clip:', subs: true });
+      }
+    }
+    if (agentId === who) render();
+  }, 45);
+  render();
 }
 
 // ---- minimap ----
@@ -737,23 +967,29 @@ function drawMap() {
 
 // ---- sự kiện ----
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-tab],[data-room],[data-agent],[data-back],[data-close],[data-rt],[data-d],[data-zoom],#bell,#sres button');
+  const t = e.target.closest('[data-tab],[data-room],[data-agent],[data-back],[data-close],[data-rt],[data-d],[data-zoom],[data-flt],[data-rv],[data-mic],#bell,#sres button');
   if (!t) { if (!e.target.closest('.search')) $('#sres').classList.remove('open'); return; }
-  if (t.dataset.tab) { tab = t.dataset.tab; if (roomId) closeRoom(); else render(); }
+  // đổi tab: có phòng đang mở thì đóng phòng; panel Tasks dời cảnh 3D sang phải
+  const goTab = name => { tab = name; if (roomId) closeRoom(); else { render(); if (scene) scene.resetView(panelShift()); } };
+  if (t.dataset.tab) goTab(t.dataset.tab);
   else if (t.dataset.room) openRoom(t.dataset.room);
-  else if (t.dataset.agent) { agentId = t.dataset.agent; render(); }
-  else if (t.hasAttribute('data-back')) { agentId = null; render(); }
-  else if (t.hasAttribute('data-close')) closeRoom();
+  else if (t.dataset.agent) { stopVoice(); agentId = t.dataset.agent; render(); }
+  else if (t.hasAttribute('data-back')) { stopVoice(); agentId = null; render(); }
+  else if (t.hasAttribute('data-close')) { if (!roomId && tab === 'Tasks') goTab('Office'); else closeRoom(); }
   else if (t.dataset.rt) { roomTab = t.dataset.rt; render(); }
   else if (t.dataset.d) decide(t.dataset.t, t.dataset.d);
-  else if (t.dataset.zoom && scene) { t.dataset.zoom === 'in' ? scene.zoomBy(0.75) : t.dataset.zoom === 'out' ? scene.zoomBy(1.33) : scene.resetView(); }
-  else if (t.id === 'bell') { tab = 'Tasks'; if (roomId) closeRoom(); else render(); }
+  else if (t.dataset.flt) { taskFilter = t.dataset.flt; render(); }
+  else if (t.dataset.rv) { reviewing.add(Number(t.dataset.rv)); render(); }
+  else if (t.hasAttribute('data-mic')) startVoice();
+  else if (t.dataset.zoom && scene) { t.dataset.zoom === 'in' ? scene.zoomBy(0.75) : t.dataset.zoom === 'out' ? scene.zoomBy(1.33) : scene.resetView(panelShift()); }
+  else if (t.id === 'bell') goTab('Tasks');
   else if (t.dataset.go) { /* xử lý ở search */ }
 });
 
 document.addEventListener('submit', async e => {
   if (e.target.id !== 'f') return;
   e.preventDefault();
+  if (voice) return sendVoice();
   const r = roomOf(roomId), text = $('#in').value.trim();
   if (!r || !text) return;
   const msg = { from: 'user', time: new Date().toTimeString().slice(0, 5), text };
@@ -803,10 +1039,58 @@ document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); qEl.focus(); }
 });
 
+// ---- số "sống" (giả lập ở UI, không ghi lại file): % skill, vòng % task, sub-agent, notes brain ----
+const normSubs = () => D.rooms.forEach(r => (r.subagents || []).forEach(s => { s.i = Math.max(0, STAGES.indexOf(s.stage)); }));
+function startLive() { paintLive(); setInterval(live, 1200); }
+function restartSubs(r) {
+  (r.subagents || []).forEach(s => { s.i = 0; s.progress = 0; });
+  doneTicks = 0;
+  toast(r.id, r.name, `${r.subagents.length} sub-agents started`);
+  paintLive();
+}
+function live() {
+  liveN++;
+  for (const r of D.rooms) {
+    for (const s of r.skills) if (s.progress != null && !s.job) s.progress = Math.min(98, Math.max(6, s.progress + (Math.random() - 0.35) * 8));
+    const subs = r.subagents || [];
+    if (!subs.length) continue;
+    if (subs.every(subDone)) { if (++doneTicks > 6) restartSubs(r); }
+    else subs.forEach(s => { if (subDone(s)) return; s.progress += 3 + Math.random() * 5; if (s.progress >= 100) { s.i++; s.progress = 0; } });
+  }
+  D.tasks.forEach(t => { if (t.status === 'running' && t.progress != null && t.progress < 100) t.progress = Math.min(100, t.progress + Math.random() * 3); });
+  if (liveN % 4 === 0) { D.brain.notes += 2; if (liveN % 12 === 0) toast(null, 'The Brain', '6 new notes saved'); }
+  paintLive();
+}
+function paintLive() {
+  $('#chip').textContent = chipText();
+  const rn = $('#runN'); if (rn) rn.textContent = counts().running;
+  document.querySelectorAll('[data-notes]').forEach(n => { n.textContent = D.brain.notes.toLocaleString('en-US'); });
+  document.querySelectorAll('[data-ring]').forEach(n => {
+    const t = D.tasks.find(x => x.id === Number(n.dataset.ring)); if (!t) return;
+    n.style.setProperty('--p', t.progress); n.firstChild.textContent = Math.round(t.progress);
+  });
+  document.querySelectorAll('[data-sk]').forEach(n => {
+    const [rid, name] = n.dataset.sk.split('/'), s = roomOf(rid) && roomOf(rid).skills.find(x => x.name === name);
+    if (!s || s.progress == null) return;
+    n.querySelector('.bar i').style.width = s.progress + '%'; n.querySelector('.p').textContent = Math.round(s.progress) + '%';
+  });
+  const r = roomId && roomOf(roomId);
+  if (r) {
+    renderSubs();
+    document.querySelectorAll('[data-subrow]').forEach(n => { const s = (r.subagents || [])[Number(n.dataset.subrow)]; if (s) n.querySelector('span span').textContent = subTxt(s); });
+  }
+  if (scene) {
+    scene.setNotes(D.brain.notes);
+    D.rooms.forEach(x => { if ((x.subagents || []).length) scene.setSubs(x.id, x.subagents.map(s => ({ label: subLabel(s), text: subTxt(s), done: subDone(s) }))); });
+  }
+}
+
 // ---- khởi động (bản chia sẻ: dữ liệu nhúng sẵn) ----
-D = {"workspace": "Hùng AI", "rooms": [{"id": "creative", "name": "Creative", "color": "#7C5CFF", "tools": [{"name": "Google Drive", "via": "MCP", "status": "connected"}, {"name": "ffmpeg", "via": "CLI", "status": "connected"}, {"name": "CapCut", "via": "MCP", "status": "connected"}, {"name": "Canva", "via": "MCP", "status": "connected"}], "skills": [{"name": "rough-cut", "progress": 71}, {"name": "captions-burn-in", "progress": 39}, {"name": "resize-for-reels", "progress": 59}, {"name": "thumbnail-maker", "progress": 55}, {"name": "hook-writer", "progress": 35}, {"name": "brand-check", "progress": null}, {"name": "music-bed", "progress": null}], "agents": [{"id": "video-editor", "role": "LEAD", "model": "sonnet", "status": "working", "task": "Cắt video Nhật 30s · 15s tiếp theo"}, {"id": "caption-bot", "role": "", "model": "haiku", "status": "working", "task": "Burn-in phụ đề"}, {"id": "thumb-bot", "role": "", "model": "haiku", "status": "idle", "task": ""}], "subagents": [{"id": "clip_01.mp4", "stage": "CUT", "progress": 20}, {"id": "clip_02.mp4", "stage": "CUT", "progress": 15}, {"id": "clip_03.mp4", "stage": "CUT", "progress": 8}], "stats": {"tasksToday": 18, "turnaroundMin": 14, "spark": {"tasks": [3, 5, 4, 8, 7, 11, 14, 18], "running": [1, 2, 2, 3, 4, 3, 5, 5], "turn": [22, 20, 19, 17, 18, 16, 15, 14]}}}, {"id": "research", "name": "Research", "color": "#3A6FE8", "tools": [{"name": "YouTube API", "via": "API", "status": "connected"}, {"name": "Web search", "via": "MCP", "status": "connected"}], "skills": [{"name": "storm-research", "progress": 55}, {"name": "comment-mining", "progress": null}], "agents": [{"id": "storm-lead", "role": "LEAD", "model": "opus", "status": "working", "task": "Storm research tuyến Nhật"}, {"id": "comment-miner", "role": "", "model": "haiku", "status": "idle", "task": ""}], "stats": {"tasksToday": 4, "turnaroundMin": 32, "spark": {"tasks": [1, 1, 2, 2, 3, 3, 4, 4], "running": [0, 1, 1, 1, 2, 1, 1, 1], "turn": [40, 38, 36, 35, 34, 33, 33, 32]}}}, {"id": "dev", "name": "Dev", "color": "#1FA35A", "tools": [{"name": "GitHub", "via": "MCP", "status": "connected"}], "skills": [{"name": "site-build", "progress": null}, {"name": "lint-brain", "progress": null}], "agents": [{"id": "site-builder", "role": "LEAD", "model": "sonnet", "status": "idle", "task": ""}], "stats": {"tasksToday": 2, "turnaroundMin": 9, "spark": {"tasks": [0, 1, 1, 1, 2, 2, 2, 2], "running": [0, 0, 1, 0, 0, 1, 0, 0], "turn": [12, 11, 10, 10, 9, 9, 9, 9]}}}, {"id": "ops", "name": "Ops", "color": "#E8833A", "tools": [{"name": "Scheduler", "via": "CLI", "status": "connected"}, {"name": "Google Sheets", "via": "MCP", "status": "connected"}], "skills": [{"name": "vph_tracker_daily", "progress": null, "job": "vph_tracker_daily"}], "agents": [{"id": "vph-runner", "role": "LEAD", "model": "haiku", "status": "idle", "task": "", "job": "vph_tracker_daily"}], "stats": {"tasksToday": 3, "turnaroundMin": 5, "spark": {"tasks": [1, 1, 1, 2, 2, 3, 3, 3], "running": [1, 1, 1, 1, 1, 1, 0, 0], "turn": [6, 6, 5, 5, 5, 5, 5, 5]}}}], "tasks": [{"id": 1, "title": "Cắt video Nhật 30s", "room": "creative", "status": "running"}, {"id": 2, "title": "Storm research tuyến Nhật", "room": "research", "status": "running"}, {"id": 3, "title": "VPH tracker hằng ngày", "room": "ops", "status": "running"}, {"id": 4, "title": "Đăng video lên kênh", "room": "creative", "status": "waiting_approval"}, {"id": 5, "title": "Deploy site demo", "room": "dev", "status": "waiting_approval"}], "calendar": [{"time": "09:00", "title": "Research: quét trend mới", "room": "research", "repeat": "hằng ngày", "fake": true}, {"time": "11:30", "title": "Creative: duyệt bản cắt", "room": "creative", "repeat": "thứ Ba, thứ Năm", "fake": true}, {"time": "14:00", "title": "vph_tracker_daily", "room": "ops", "repeat": "hằng ngày", "job": "vph_tracker_daily", "fake": false}, {"time": "17:00", "title": "Dev: backup brain lên GitHub", "room": "dev", "repeat": "thứ Sáu", "fake": true}], "toasts": [{"room": "research", "title": "Research", "text": "Found 3 new trending repos"}, {"room": "dev", "title": "Dev", "text": "tbx-site deployed ✓"}], "chats": {"video-editor": [{"from": "user", "time": "08:58", "text": "Cắt video Nhật xuống 30s, giữ cảnh mở đầu."}, {"from": "agent", "time": "09:03", "text": "Đã nhận. Bản thô 41s, đang cắt phần giới thiệu."}, {"from": "agent", "time": "09:12", "text": "Bản 30s xong. 15s và 9s làm tiếp. Xem v2 không?", "attachment": "nhat-30s-v2.mp4 · 0:30 · 1080×1920"}], "storm-lead": [{"from": "user", "time": "08:40", "text": "Chạy storm research tuyến Nhật."}, {"from": "agent", "time": "08:41", "text": "Đang gom nguồn, đã xong 55%."}]}, "brain": {"notes": 1842, "source": "okf-second-brain"}};
+D = {"workspace": "Hùng AI", "rooms": [{"id": "creative", "name": "Creative", "color": "#7C5CFF", "tools": [{"name": "Google Drive", "via": "MCP", "status": "connected", "color": "#1FA35A", "glyph": "▣"}, {"name": "ffmpeg", "via": "CLI", "status": "connected", "color": "#2a2f45", "glyph": "ff"}, {"name": "CapCut", "via": "MCP", "status": "connected", "color": "#0b0d14", "glyph": "C"}, {"name": "Canva", "via": "MCP", "status": "connected", "color": "#3A6FE8", "glyph": "C"}], "skills": [{"name": "rough-cut", "progress": 71}, {"name": "captions-burn-in", "progress": 39}, {"name": "resize-for-reels", "progress": 59}, {"name": "thumbnail-maker", "progress": 55}, {"name": "hook-writer", "progress": 35}, {"name": "brand-check", "progress": null}, {"name": "music-bed", "progress": null}], "agents": [{"id": "video-editor", "role": "LEAD", "model": "sonnet", "status": "working", "task": "Cắt video Nhật 30s · 15s tiếp theo"}, {"id": "caption-bot", "role": "", "model": "haiku", "status": "working", "task": "Burn-in phụ đề"}, {"id": "thumb-bot", "role": "", "model": "haiku", "status": "idle", "task": ""}], "subagents": [{"id": "clip_01.mp4", "stage": "CUT", "progress": 20}, {"id": "clip_02.mp4", "stage": "CUT", "progress": 15}, {"id": "clip_03.mp4", "stage": "CUT", "progress": 8}], "stats": {"tasksToday": 18, "turnaroundMin": 14, "spark": {"tasks": [3, 5, 4, 8, 7, 11, 14, 18], "running": [1, 2, 2, 3, 4, 3, 5, 5], "turn": [22, 20, 19, 17, 18, 16, 15, 14]}}}, {"id": "research", "name": "Research", "color": "#3A6FE8", "tools": [{"name": "YouTube API", "via": "API", "status": "connected"}, {"name": "Web search", "via": "MCP", "status": "connected"}], "skills": [{"name": "storm-research", "progress": 55}, {"name": "comment-mining", "progress": null}], "agents": [{"id": "storm-lead", "role": "LEAD", "model": "opus", "status": "working", "task": "Storm research tuyến Nhật"}, {"id": "comment-miner", "role": "", "model": "haiku", "status": "idle", "task": ""}], "stats": {"tasksToday": 4, "turnaroundMin": 32, "spark": {"tasks": [1, 1, 2, 2, 3, 3, 4, 4], "running": [0, 1, 1, 1, 2, 1, 1, 1], "turn": [40, 38, 36, 35, 34, 33, 33, 32]}}}, {"id": "dev", "name": "Dev", "color": "#1FA35A", "tools": [{"name": "GitHub", "via": "MCP", "status": "connected"}], "skills": [{"name": "site-build", "progress": null}, {"name": "lint-brain", "progress": null}], "agents": [{"id": "site-builder", "role": "LEAD", "model": "sonnet", "status": "idle", "task": ""}], "stats": {"tasksToday": 2, "turnaroundMin": 9, "spark": {"tasks": [0, 1, 1, 1, 2, 2, 2, 2], "running": [0, 0, 1, 0, 0, 1, 0, 0], "turn": [12, 11, 10, 10, 9, 9, 9, 9]}}}, {"id": "ops", "name": "Ops", "color": "#E8833A", "tools": [{"name": "Scheduler", "via": "CLI", "status": "connected"}, {"name": "Google Sheets", "via": "MCP", "status": "connected"}], "skills": [{"name": "vph_tracker_daily", "progress": null, "job": "vph_tracker_daily"}], "agents": [{"id": "vph-runner", "role": "LEAD", "model": "haiku", "status": "idle", "task": "", "job": "vph_tracker_daily"}], "stats": {"tasksToday": 3, "turnaroundMin": 5, "spark": {"tasks": [1, 1, 1, 2, 2, 3, 3, 3], "running": [1, 1, 1, 1, 1, 1, 0, 0], "turn": [6, 6, 5, 5, 5, 5, 5, 5]}}}], "tasks": [{"id": 1, "title": "Cắt video Nhật 30s", "room": "creative", "status": "running", "owner": "Sub-agent 1", "progress": 46, "fake": true}, {"id": 2, "title": "Storm research tuyến Nhật", "room": "research", "status": "running", "owner": "storm-lead", "progress": 55, "fake": true}, {"id": 3, "title": "VPH tracker hằng ngày", "room": "ops", "status": "running", "owner": "vph-runner"}, {"id": 4, "title": "Đăng video lên kênh", "room": "creative", "status": "waiting_approval", "note": "needs your approval", "action": "approve", "fake": true}, {"id": 5, "title": "Deploy site demo", "room": "dev", "status": "waiting_approval", "note": "needs your approval", "action": "approve", "fake": true}, {"id": 6, "title": "Trả lời email hợp tác nhãn hàng", "room": "ops", "status": "waiting_approval", "note": "draft ready", "action": "review", "fake": true}, {"id": 7, "title": "Thumbnail A/B test", "room": "creative", "status": "done", "ago": "2h ago", "fake": true}, {"id": 8, "title": "Báo cáo giữ chân tuần", "room": "research", "status": "done", "ago": "4h ago", "fake": true}, {"id": 9, "title": "Fix site demo", "room": "dev", "status": "done", "ago": "PR #42 merged", "fake": true}], "calendar": [{"time": "09:00", "title": "Research: quét trend mới", "room": "research", "repeat": "hằng ngày", "fake": true}, {"time": "11:30", "title": "Creative: duyệt bản cắt", "room": "creative", "repeat": "thứ Ba, thứ Năm", "fake": true, "card": {"day": "TUE"}}, {"time": "14:00", "title": "vph_tracker_daily", "room": "ops", "repeat": "hằng ngày", "job": "vph_tracker_daily", "fake": false}, {"time": "17:00", "title": "Dev: backup brain lên GitHub", "room": "dev", "repeat": "thứ Sáu", "fake": true}], "toasts": [{"room": "research", "title": "Research", "text": "Found 3 new trending repos"}, {"room": "dev", "title": "Dev", "text": "tbx-site deployed ✓"}], "chats": {"video-editor": [{"from": "user", "time": "08:58", "text": "Cắt video Nhật xuống 30s, giữ cảnh mở đầu."}, {"from": "agent", "time": "09:03", "text": "Đã nhận. Bản thô 41s, đang cắt phần giới thiệu."}, {"from": "agent", "time": "09:12", "text": "Bản 30s xong. 15s và 9s làm tiếp. Xem v2 không?", "attachment": "nhat-30s-v2.mp4 · 0:30 · 1080×1920"}, {"from": "agent", "time": "09:20", "text": "Đang tách 3 clip, mỗi clip một sub-agent:", "subs": true}], "storm-lead": [{"from": "user", "time": "08:40", "text": "Chạy storm research tuyến Nhật."}, {"from": "agent", "time": "08:41", "text": "Đang gom nguồn, đã xong 55%."}]}, "brain": {"notes": 1842, "source": "okf-second-brain"}};
+normSubs();
 overlay({"jobs": {"vph_tracker_daily": {"last_run": "2026-07-08 14:00", "rows": 120, "errors": 0, "zero_vph": 10, "zero_pct": 8.3, "log_status": "OK", "age_hours": 2400.0, "status": "stale", "history": ["2026-07-02", "2026-07-03", "2026-07-04", "2026-07-05", "2026-07-06", "2026-07-07", "2026-07-08"]}}});
 render();
+startLive();
 (D.toasts || []).forEach((t, i) => setTimeout(() => toast(t.room, t.title, t.text), 1200 + i * 2500));
 
 </script>
